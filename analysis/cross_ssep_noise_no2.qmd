@@ -1,0 +1,222 @@
+---
+title: "cross_ssep_noise"
+author: "olaf könig"
+format: html
+editor: visual
+---
+
+## Extraction of the raster data (noise)
+
+```{r}
+
+library(tidyverse)
+library(tidylog)
+library(terra)
+library(sf)
+library(mapview)
+```
+
+## Import sf and raster
+
+Socio-economic datas from:
+
+<https://drive.google.com/drive/u/0/folders/10_awIUK1tj0z646Y-0ilFn8ggtgh-2Zy>
+
+#### SEP
+
+```{r}
+
+sf_sep <- read_sf("data_input/data_raw/df_sep.gpkg")
+
+sf_sep <- sf_sep %>% mutate(id = row_number())
+
+```
+
+#### Raster noise
+
+```{r}
+
+rast_noise <- rast("data_input/data_raw/LrStrasseTag_4_0_Meter.tif")
+```
+
+### Raster NO2
+
+```{r}
+
+rast_no2 <- rast("data_input/data_raw/no2_ymw_2021.asc") %>%
+  {crs(.) <- "EPSG:21781"; .} %>%  # Assigner CRS LV03
+  project("EPSG:2056")              # Reprojeter LV95
+
+```
+
+#### Municipalites
+
+```{r}
+
+sf_municipalities <- read_sf("data_input/data_raw/sf_polg_swisstopo.gpkg")
+```
+
+### Extract municipalities
+
+```{r}
+
+sf_sep <- st_join(sf_sep, sf_municipalities[, c("bfs_nummer")], left = TRUE)
+
+# # check NA
+# sf_sep %>% filter(is.na(bfs_nummer))
+```
+
+## Extraction function
+
+```{r}
+
+extract_raster_values_generic <- function(
+  points_sf,
+  raster_input,          # soit chemin (string) soit SpatRaster
+  value_name = "value",
+  method = "bilinear",
+  chunk_size = 10000
+) {
+  # Charger raster si c’est un chemin
+  if (is.character(raster_input)) {
+    rast_obj <- terra::rast(raster_input)
+  } else if (inherits(raster_input, "SpatRaster")) {
+    rast_obj <- raster_input
+  } else {
+    stop("raster_input doit être un chemin ou un objet SpatRaster")
+  }
+  
+  points_vect <- terra::vect(points_sf)
+  
+  n_points <- length(points_vect)
+  n_chunks <- ceiling(n_points / chunk_size)
+  cat("Nombre de points :", n_points, "\nNombre de chunks :", n_chunks, "\n")
+  
+  chunks <- split(1:n_points, ceiling(seq_along(1:n_points) / chunk_size))
+  
+  values_list <- vector("list", length(chunks))
+  pb <- txtProgressBar(min = 0, max = length(chunks), style = 3)
+  
+  for (i in seq_along(chunks)) {
+    idx <- chunks[[i]]
+    chunk_points <- points_vect[idx]
+    vals <- terra::extract(rast_obj, chunk_points, method = method)
+    values_list[[i]] <- vals[, 2]  # Colonne 2 = valeurs extraites
+    setTxtProgressBar(pb, i)
+  }
+  
+  close(pb)
+  
+  values_vec <- unlist(values_list)
+  points_sf[[value_name]] <- values_vec
+  return(points_sf)
+}
+
+
+```
+
+### Function call - extraction noise
+
+```{r}
+
+sep_cross_noise <- extract_raster_values_generic(sf_sep, rast_noise, "noise", method = "bilinear")
+
+
+# Replace NA by 0
+sep_cross_noise$noise[is.na(sep_cross_noise$noise)] <- 0
+```
+
+### Function call - extraction NO2
+
+```{r}
+
+sep_cross_no2 <- extract_raster_values_generic(sf_sep, rast_no2, "no2", method = "bilinear")
+```
+
+```{r}
+
+sep_cross_no2_extract <- sep_cross_no2 %>% 
+  st_drop_geometry() %>% 
+  select(id, no2)
+```
+
+## Merge
+
+```{r}
+
+sep_cross_noise_no2 <- sep_cross_no2 %>% left_join(sep_cross_no2_extract)
+  
+```
+
+# Export
+
+```{r}
+
+sep_cross_noise_no2 %>% 
+  write_sf("data_input/data_edit/sep_cross_noise_no2.gpkg")
+```
+
+# Quick check / analysis
+
+#### Overview
+
+```{r}
+
+# Pour les déciles
+ggplot(sep_with_noise, aes(factor(ssep3_d), noise)) +
+  geom_boxplot() +
+  labs(x = "Décile socio-économique", y = "Exposition au bruit (dB)",
+       title = "Exposition au bruit selon le décile socio-économique")
+
+```
+
+```{r}
+
+library(dplyr)
+
+summary <- sep_with_noise %>%
+  st_drop_geometry() %>% 
+  group_by(ssep3_d) %>%
+  summarise(
+    n = n(),
+    # mean_noise   = mean(noise, na.rm = TRUE),
+    # median_noise = median(noise, na.rm = TRUE),
+    pct_above_50 = mean(noise > 50) * 100,
+    pct_above_55 = mean(noise > 55) * 100,
+    pct_above_60 = mean(noise > 55) * 100
+  )
+print(summary)
+```
+
+```{r}
+
+library(tidyr)
+library(ggplot2)
+
+# Prépare le dataframe en format long
+summary_long <- summary %>%
+  pivot_longer(
+    cols = starts_with("pct_above_"),
+    names_to = "seuil",
+    values_to = "pct_exposes"
+  ) %>%
+  mutate(seuil = factor(seuil, levels = c("pct_above_50", "pct_above_55", "pct_above_60"),
+                        labels = c("> 50 dB", "> 55 dB", "> 60 dB")))
+
+# Graphique small multiples avec facet_wrap
+ggplot(summary_long, aes(x = factor(ssep3_d), y = pct_exposes)) +
+  geom_col(fill = "#fc9272", width = 0.7) +
+  labs(
+    x = "Décile socio-économique (1 = plus défavorisé)",
+    y = "Ménages exposés (%)",
+    title = "Part des ménages exposés au bruit selon différents seuils"
+  ) +
+  theme_minimal(base_family = "IBM Plex Sans") +
+  theme(
+    plot.title = element_text(face = "bold", size = 15),
+    axis.title = element_text(size = 13)
+  ) +
+  coord_flip() +
+  facet_wrap(~ seuil, ncol = 1)
+
+```
