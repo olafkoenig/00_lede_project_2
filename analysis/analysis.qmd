@@ -1,0 +1,475 @@
+---
+title: "analysis"
+author: "Olaf König"
+format: html
+editor: visual
+---
+
+```{r}
+
+library(tidyverse)
+library(tidylog)
+library(terra)
+library(sf)
+library(mapview)
+library(spatstat)
+library(mapsf)
+library(btb)
+library(spData)
+library(spdep)
+library(viridis)
+```
+
+## Loading file
+
+```{r}
+
+sf <- read_sf("data_input/data_edit/sep_cross_noise_no2_ndvi500.gpkg")
+```
+
+```{r}
+
+sep_cross_noise_no2 <- sf
+```
+
+```{r}
+# str(sep_cross_noise_no2)
+```
+
+## Spatstat
+
+#### Créer un objet ppp (Point Pattern)
+
+```{r}
+
+points_df <- as.data.frame(st_coordinates(sep_cross_noise_no2))
+names(points_df) <- c("x", "y")
+points_df$ssep3 <- sep_cross_noise_no2$ssep3
+points_df$no2 <- sep_cross_noise_no2$no2
+# Si 'noise' est présent, ajoutez-le
+points_df$noise <- sep_cross_noise_no2$noise
+```
+
+```{r}
+
+# Définir la fenêtre d'étude (étendue des points)
+owin_data <- owin(
+  xrange = c(min(points_df$x), max(points_df$x)),
+  yrange = c(min(points_df$y), max(points_df$y))
+)
+```
+
+```{r}
+
+# Créer un objet ppp
+# Pour une variable quantitative comme no2, on utilise un "processus ponctuel marqué" [13, 14]
+ppp_no2 <- ppp(
+  x = points_df$x,
+  y = points_df$y,
+  window = owin_data,
+  marks = points_df$no2 # Les valeurs de no2 sont les "marques"
+)
+
+# Lissage de NO2 (intensité spatiale avec des valeurs de marques)
+# kernel = "gaussian" est un choix courant [15]
+# sigma est la bande passante (rayon de lissage). Ajustez-le selon votre échelle.
+# Exemple: 500 mètres (arbitraire, à ajuster)
+sigma_no2 <- 500
+
+# Utilisation de density.ppp avec l'argument "weights" pour lisser une variable continue
+# Ici, on lisse la variable no2 en pondérant chaque point par sa valeur de no2.
+# Le résultat est une grille de valeurs lissées (objet im)
+densite_no2 <- density(ppp_no2, sigma=sigma_no2, weights=ppp_no2$marks) # [16]
+
+
+```
+
+```{r}
+
+# --- Lissage pour ssep3 (si traité comme une variable quantitative ordinale) ---
+# Si ssep3 est numérique (ex: décile 1 à 10, centile 1 à 100), vous pouvez le lisser de la même manière.
+ppp_ssep3 <- ppp(
+  x = points_df$x,
+  y = points_df$y,
+  window = owin_data,
+  marks = points_df$ssep3_numeric
+)
+densite_ssep3 <- density(ppp_ssep3, sigma=sigma_no2, weights=ppp_ssep3$marks)
+
+```
+
+```{r}
+
+# --- Lissage pour Noise (si présent) ---
+ppp_noise <- ppp(
+    x = points_df$x,
+    y = points_df$y,
+    window = owin_data,
+    marks = points_df$noise
+  )
+  densite_noise <- density(ppp_noise, sigma=sigma_no2, weights=ppp_noise$marks)
+```
+
+```{r}
+
+# Cartographier les résultats du lissage
+# Utilisation de ggplot2 pour une meilleure flexibilité et esthétique
+# Convertir l'objet im (image spatstat) en data.frame pour ggplot
+df_no2_smooth <- as.data.frame(densite_no2)
+df_ssep3_smooth <- as.data.frame(densite_ssep3)
+# Si noise est présent
+if ("noise" %in% names(points_df)) {
+  df_noise_smooth <- as.data.frame(densite_noise)
+}
+```
+
+```{r}
+
+# Carte de la densité lissée de NO2
+ggplot(df_no2_smooth, aes(x = x, y = y, fill = value)) +
+  geom_raster() +
+  scale_fill_viridis_c(option = "plasma", direction = -1, name = "NO2 lissé") + # Palette viridis est bonne
+  coord_sf(crs = st_crs(sep_cross_noise_no2)) + # Assurer la bonne projection
+  labs(title = "Densité lissée de NO2",
+       subtitle = paste0("Bande passante = ", sigma_no2, " mètres")) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+
+```
+
+```{r}
+
+# Carte de la densité lissée de ssep3 (moyenne des déciles/centiles)
+ggplot(df_ssep3_smooth, aes(x = x, y = y, fill = value)) +
+  geom_raster() +
+  scale_fill_viridis_c(option = "cividis", name = "SSEP3 lissé (moyenne)") +
+  coord_sf(crs = st_crs(sep_cross_noise_no2)) +
+  labs(title = "Densité lissée de SSEP3",
+       subtitle = paste0("Bande passante = ", sigma_no2, " mètres\n(Valeurs plus élevées = statut socio-éco plus élevé)")) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+
+```
+
+```{r}
+# Carte de la densité lissée de Noise (si présent)
+if ("noise" %in% names(points_df)) {
+  ggplot(df_noise_smooth, aes(x = x, y = y, fill = value)) +
+    geom_raster() +
+    scale_fill_viridis_c(option = "magma", direction = -1, name = "Noise lissé") +
+    coord_sf(crs = st_crs(sep_cross_noise_no2)) +
+    labs(title = "Densité lissée de Pollution Sonore",
+         subtitle = paste0("Bande passante = ", sigma_no2, " mètres")) +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5),
+          plot.subtitle = element_text(hjust = 0.5))
+}
+```
+
+### **Mesurer l'importance des effets spatiaux (Autocorrélation)**
+
+```{r}
+
+# Convertir l'objet sf en objet sp (car spdep travaille historiquement avec sp)
+# ou utiliser st_coordinates directement avec spdep, car spdep s'adapte [24]
+# Cependant, pour être sûr, la conversion est une bonne pratique
+sep_cross_noise_no2_sp <- as(sep_cross_noise_no2, "Spatial")
+
+# 1. Définir les voisins par les K plus proches voisins (ex: k=10)
+# Cela assure que chaque point a un nombre fixe de voisins, utile pour les zones peu denses.
+k_neighbors <- 10 # Nombre de voisins à considérer
+
+
+
+```
+
+```{r}
+
+# # Trop lent...
+# voisins_knn <- knearneigh(sep_cross_noise_no2_sp, k = k_neighbors) # [25] 
+
+
+library(dbscan)
+library(spdep)
+
+coords <- sf::st_coordinates(sep_cross_noise_no2)
+k <- 10
+
+knn_obj <- dbscan::kNN(coords, k = k)
+# Créer l'objet nb attendu par spdep à partir de knn_obj$id
+voisins_knn <- lapply(1:nrow(knn_obj$id), function(i) knn_obj$id[i, ])
+class(voisins_knn) <- "nb"
+attr(voisins_knn, "region.id") <- as.character(1:nrow(knn_obj$id))
+attr(voisins_knn, "call") <- match.call()
+attr(voisins_knn, "type") <- "knn"
+attr(voisins_knn, "sym") <- FALSE
+
+
+
+liste_voisins <- knn2nb(voisins_knn) # Créer la liste de voisins [25]
+
+# 2. Convertir la liste de voisins en matrice de poids spatiaux (style "W" pour normalisation par ligne)
+# Le style "W" (row-standardized) normalise les poids pour que la somme de chaque ligne soit 1 [26].
+matrice_poids <- nb2listw(liste_voisins, style = "W", zero.policy = TRUE)
+# zero.policy = TRUE permet de gérer les points sans voisins (bien que rare avec knn)
+
+```
+
+## Indice de Moran trop gros...
+
+```{r}
+
+# L'Indice de Moran global (I) mesure l'autocorrélation spatiale d'une variable pour l'ensemble du territoire.
+# --- Test de Moran pour SSEP3 ---
+# SSEP3 est ordinal, mais nous le traitons comme numérique pour ce test.
+# Il est souvent utile de standardiser la variable (z-score) pour l'interprétation.
+ssep3_scaled <- scale(sep_cross_noise_no2$ssep3)
+
+moran_ssep3 <- moran.test(ssep3_scaled, matrice_poids, zero.policy = TRUE) # [28]
+print("Résultat Moran global pour SSEP3 :")
+print(moran_ssep3)
+
+# Interprétation:
+# Un I de Moran positif indique une autocorrélation spatiale positive (valeurs similaires regroupées).
+# Une p-value faible (< 0.05) indique que l'autocorrélation est statistiquement significative.
+# Pour les détails, consultez la documentation du test de Moran [27].
+```
+
+# Régression linéaire classique
+
+Je reprends l'introduction de:
+
+<https://r-spatial.org/book/10-Models.html>
+
+```{r}
+
+lm(ssep3 ~ no2, data = sep_cross_noise_no2)
+lm(ssep3 ~ noise, data = sep_cross_noise_no2)
+
+lm(ndvi_500m  ~ ssep3_d, data = sep_cross_noise_no2 %>% 
+     filter(bfs_nummer %in% list_cities_10))
+
+
+lm(ssep3 ~ no2 + noise, data = sep_cross_noise_no2)
+# 
+# lm()
+# sep_cross_noise_no2
+```
+
+```{r}
+
+lm(scale(ssep3) ~ scale(no2) + scale(noise), data = sep_cross_noise_no2)
+
+```
+
+### Correlation NO2 Noise
+
+```{r}
+
+cor(sep_cross_noise_no2$no2, sep_cross_noise_no2$noise, use = "complete.obs")
+
+```
+
+```{r}
+library(ggplot2)
+
+ggplot(sep_cross_noise_no2, aes(x = no2, y = noise)) +
+  geom_point(alpha = 0.1) +
+  geom_smooth(method = "loess", col = "red") +
+  labs(title = "Relation entre NO2 et bruit",
+       x = "NO2 (µg/m³ ou unité)",
+       y = "Bruit (dB)") +
+  theme_minimal()
+
+```
+
+# Quick check / analysis
+
+## National
+
+#### Overview
+
+```{r}
+
+# Pour les déciles
+ggplot(sf, aes(factor(ssep3_d), noise)) +
+  geom_boxplot() +
+  labs(x = "Décile socio-économique", y = "Exposition au bruit (dB)",
+       title = "Exposition au bruit selon le décile socio-économique")
+
+```
+
+```{r}
+
+library(dplyr)
+
+summary <- sf %>%
+  st_drop_geometry() %>% 
+  group_by(ssep3_d) %>%
+  summarise(
+    n = n(),
+    mean_noise   = mean(noise, na.rm = TRUE),
+    median_noise = median(noise, na.rm = TRUE),
+    pct_above_50 = mean(noise > 50) * 100,
+    pct_above_60 = mean(noise > 60) * 100,
+    mean_no2     = mean(no2, na.rm = TRUE),
+    median_no2   = median(no2, na.rm = TRUE),
+    pct_above_10_no2 = mean(no2 > 10) * 100,
+    pct_above_20_no2 = mean(no2 > 20) * 100
+  )
+print(summary)
+
+```
+
+```{r}
+
+library(tidyr)
+library(ggplot2)
+library(dplyr)
+
+# Si dans summary tu as pct_above_20_no2, sinon adapte
+summary_long <- summary %>%
+  pivot_longer(
+    cols = c(pct_above_50, pct_above_60, pct_above_10_no2, pct_above_20_no2),
+    names_to = "seuil",
+    values_to = "pct_exposes"
+  ) %>%
+  mutate(seuil = factor(seuil,
+                        levels = c("pct_above_50", "pct_above_60", "pct_above_10_no2", "pct_above_20_no2"),
+                        labels = c("Bruit > 50 dB", "Bruit > 60 dB", "NO2 > 10", "NO2 > 20")))
+
+# Graphique small multiples
+ggplot(summary_long, aes(x = factor(ssep3_d), y = pct_exposes)) +
+  geom_col(fill = "#fc9272", width = 0.7) +
+  labs(
+    x = "Décile socio-économique (1 = plus défavorisé)",
+    y = "Ménages exposés (%)",
+    title = "Exposition au bruit et à la pollution NO2 selon les seuils"
+  ) +
+  theme_minimal(base_family = "IBM Plex Sans") +
+  theme(
+    plot.title = element_text(face = "bold", size = 15),
+    axis.title = element_text(size = 13)
+  ) +
+  coord_flip() +
+  facet_wrap(~ seuil, ncol = 1)
+
+```
+
+## Cities
+
+```{r}
+
+cities_pop <- read_csv("data_input/data_raw/stats_cities.csv") %>% 
+  select(bfs_nummer,nom_officiel, POP_2023)
+
+list_cities <- cities_pop %>% 
+  pull(bfs_nummer)
+
+list_cities_10 <- cities_pop %>% 
+  slice_max(POP_2023, n=10) %>% 
+  pull(bfs_nummer)
+```
+
+```{r}
+
+# 1. Filtrer pour ne garder que ces communes
+df_filtered <- sf %>%
+  filter(bfs_nummer %in% list_cities)
+
+# 2. Splitter par commune
+list_par_commune <- df_filtered %>%
+  group_split(bfs_nummer)
+
+# 3. Fonction qui calcule les déciles locaux et les stats
+analyser_commune <- function(df_commune) {
+  # Créer déciles locaux sur ssep3
+  df_commune <- df_commune %>%
+    mutate(ssep3d_local = ntile(ssep3, 10))  # 10 déciles locaux
+  
+  # Calculer stats par décile local
+  df_summary <- df_commune %>%
+    group_by(bfs_nummer, ssep3d_local) %>%
+    summarise(
+      n = n(),
+      pct_above_50 = mean(noise > 50) * 100,
+      pct_above_60 = mean(noise > 60) * 100,
+      pct_above_10_no2 = mean(no2 > 10) * 100,
+      pct_above_20_no2 = mean(no2 > 20) * 100,
+      .groups = "drop"
+    )
+  
+  return(df_summary)
+}
+
+# 4. Appliquer à chaque commune, puis rassembler
+resultats <- map_df(list_par_commune, analyser_commune)
+
+# Visualiser le résultat
+print(resultats)
+```
+
+```{r}
+
+resultats <- resultats %>%
+  left_join(cities_pop %>% select(bfs_nummer, nom_officiel), by = "bfs_nummer")
+
+```
+
+```{r}
+
+plot_commune <- function(df, commune_id, output_dir = "data_output/charts/") {
+  df_commune <- df %>% filter(bfs_nummer == commune_id)
+  
+  nom_commune <- unique(df_commune$nom_officiel)
+  if(length(nom_commune) != 1) {
+    warning(paste0("Attention, plusieurs ou aucun nom officiel pour bfs_nummer = ", commune_id))
+    nom_commune <- commune_id
+  }
+  
+  df_long <- df_commune %>%
+    pivot_longer(
+      cols = starts_with("pct_above_"),
+      names_to = "seuil",
+      values_to = "pct_exposes"
+    ) %>%
+    mutate(seuil = factor(seuil,
+                          levels = c("pct_above_50", "pct_above_60", "pct_above_10_no2", "pct_above_20_no2"),
+                          labels = c("Bruit > 50 dB", "Bruit > 60 dB", "NO2 > 10", "NO2 > 20")))
+  
+  p <- ggplot(df_long, aes(x = factor(ssep3d_local), y = pct_exposes)) +
+    geom_col(fill = "#fc9272", width = 0.7) +
+    labs(
+      x = "Décile local de statut socio-économique",
+      y = "Ménages exposés (%)",
+      title = paste0("Commune ", nom_commune, " - Exposition bruit & NO2")
+    ) +
+    theme_minimal(base_family = "IBM Plex Sans") +
+    theme(
+      plot.title = element_text(face = "bold", size = 15),
+      axis.title = element_text(size = 13)
+    ) +
+    coord_flip() +
+    facet_wrap(~ seuil, ncol = 1)
+  
+  print(p)
+  
+  # Créer le dossier s'il n'existe pas
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = TRUE)
+  }
+  
+  nom_fichier <- gsub("[^a-zA-Z0-9]", "_", nom_commune)
+  ggsave(filename = paste0(output_dir, "chart_", nom_fichier, ".svg"), plot = p, width = 10, height = 8)
+}
+
+```
+
+```{r}
+
+library(purrr)
+
+walk(list_cities_10, ~ plot_commune(resultats, .x))
+```

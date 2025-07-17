@@ -131,6 +131,10 @@ sep_cross_noise$noise[is.na(sep_cross_noise$noise)] <- 0
 ```{r}
 
 sep_cross_no2 <- extract_raster_values_generic(sf_sep, rast_no2, "no2", method = "bilinear")
+
+sep_cross_no2 <- sep_cross_no2 %>%
+  mutate(no2 = ifelse(is.na(no2), 0, no2))
+
 ```
 
 ```{r}
@@ -144,7 +148,7 @@ sep_cross_no2_extract <- sep_cross_no2 %>%
 
 ```{r}
 
-sep_cross_noise_no2 <- sep_cross_no2 %>% left_join(sep_cross_no2_extract)
+sep_cross_noise_no2 <- sep_cross_noise %>% left_join(sep_cross_no2_extract)
   
 ```
 
@@ -156,67 +160,6 @@ sep_cross_noise_no2 %>%
   write_sf("data_input/data_edit/sep_cross_noise_no2.gpkg")
 ```
 
-# Quick check / analysis
+------------------------------------------------------------------------
 
-#### Overview
-
-```{r}
-
-# Pour les déciles
-ggplot(sep_with_noise, aes(factor(ssep3_d), noise)) +
-  geom_boxplot() +
-  labs(x = "Décile socio-économique", y = "Exposition au bruit (dB)",
-       title = "Exposition au bruit selon le décile socio-économique")
-
-```
-
-```{r}
-
-library(dplyr)
-
-summary <- sep_with_noise %>%
-  st_drop_geometry() %>% 
-  group_by(ssep3_d) %>%
-  summarise(
-    n = n(),
-    # mean_noise   = mean(noise, na.rm = TRUE),
-    # median_noise = median(noise, na.rm = TRUE),
-    pct_above_50 = mean(noise > 50) * 100,
-    pct_above_55 = mean(noise > 55) * 100,
-    pct_above_60 = mean(noise > 55) * 100
-  )
-print(summary)
-```
-
-```{r}
-
-library(tidyr)
-library(ggplot2)
-
-# Prépare le dataframe en format long
-summary_long <- summary %>%
-  pivot_longer(
-    cols = starts_with("pct_above_"),
-    names_to = "seuil",
-    values_to = "pct_exposes"
-  ) %>%
-  mutate(seuil = factor(seuil, levels = c("pct_above_50", "pct_above_55", "pct_above_60"),
-                        labels = c("> 50 dB", "> 55 dB", "> 60 dB")))
-
-# Graphique small multiples avec facet_wrap
-ggplot(summary_long, aes(x = factor(ssep3_d), y = pct_exposes)) +
-  geom_col(fill = "#fc9272", width = 0.7) +
-  labs(
-    x = "Décile socio-économique (1 = plus défavorisé)",
-    y = "Ménages exposés (%)",
-    title = "Part des ménages exposés au bruit selon différents seuils"
-  ) +
-  theme_minimal(base_family = "IBM Plex Sans") +
-  theme(
-    plot.title = element_text(face = "bold", size = 15),
-    axis.title = element_text(size = 13)
-  ) +
-  coord_flip() +
-  facet_wrap(~ seuil, ncol = 1)
-
-```
+------------------------------------------------------------------------

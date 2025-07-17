@@ -1,0 +1,246 @@
+---
+title: "ssep_nvdi_extract"
+author: "olaf könig"
+format: html
+editor: visual
+---
+
+```{r}
+
+sep_cross_noise_no2 <- read_sf("data_input/data_edit/sep_cross_noise_no2.gpkg")
+```
+
+```{r}
+
+ndvi <- rast("/Users/bajj@mediait.ch/Documents/Tamedia/2025/2025-05_Vegetation_Index/data_output/tile_fusion/composite_terra_ordered.tif") %>% 
+  project("EPSG:2056")
+```
+
+```{r}
+
+sf_municipalities <- read_sf("data_input/data_raw/sf_polg_swisstopo.gpkg")
+
+cities_pop <- read_csv("data_input/data_raw/stats_cities.csv") %>% 
+  select(bfs_nummer,nom_officiel, POP_2023)
+
+list_cities <- cities_pop %>% 
+  pull(bfs_nummer)
+
+list_cities_10 <- cities_pop %>% 
+  slice_max(POP_2023, n=10) %>% 
+  pull(bfs_nummer)
+
+sf_cities_10 <- sf_municipalities %>% 
+  filter(bfs_nummer %in% list_cities_10)
+```
+
+```{r}
+
+communes_10_buffer <- sf_cities_10 %>%
+  st_buffer(500)
+
+communes_vect <- terra::vect(communes_10_buffer)
+
+```
+
+## Découpage du raster NDVI
+
+```{r}
+
+# Fonction crop + mask pour une géométrie (commune buffer)
+crop_commune_raster <- function(geom_vect, raster) {
+  cropped <- terra::crop(raster, geom_vect)
+  masked <- terra::mask(cropped, geom_vect)
+  return(masked)
+}
+
+# Appliquer sur chaque commune
+list_crops <- lapply(1:length(communes_vect), function(i) {
+  geom <- communes_vect[i]
+  crop_commune_raster(geom, ndvi)
+})
+
+names(list_crops) <- sf_cities_10$bfs_nummer  # nommer la liste par bfs_nummer
+
+```
+
+### Function extract focal points
+
+```{r}
+
+library(terra)
+
+compute_focal_proportion <- function(raster_crop, radius = 500) {
+  if (all(is.na(values(raster_crop)))) {
+    warning("Le raster est entièrement NA. Retour d'un raster vide.")
+    return(raster_crop)  # Ou un raster vide de même dimension
+  }
+  
+  w <- focalMat(raster_crop, radius, type = "circle")
+  
+  raster_bin <- raster_crop >= 0.5
+  
+  prop_raster <- focal(raster_bin, w, fun = mean, na.rm = TRUE)
+  
+  return(prop_raster)
+}
+
+```
+
+### Test on one municipality (possible time issue)
+
+```{r}
+
+# # Récupérer le raster croppé et masqué pour la 1ère commune
+# raster_commune <- list_crops[[1]]
+# 
+# # Appliquer la fonction compute_focal_proportion
+# prop_raster <- compute_focal_proportion(raster_commune, radius = 500)
+# 
+# # Visualiser si tu veux
+# terra::plot(prop_raster)
+
+```
+
+### Focal computation for 10 cities
+
+The computation takes a lot of time.... (10 minutes). -\> export the results
+
+```{r}
+
+list_prop_rasters <- map(list_crops, compute_focal_proportion, radius = 500)
+```
+
+```{r}
+
+list_prop_rasters_200 <- map(list_crops, compute_focal_proportion, radius = 200)
+```
+
+#### Focal computation Export
+
+```{r}
+
+library(terra)
+
+output_dir <- "data_output/ndvi_prop_500m/"
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
+
+# Exporter chaque raster dans la liste
+for (bfs_nummer in names(list_prop_rasters)) {
+  raster_to_save <- list_prop_rasters[[bfs_nummer]]
+  
+  # Nettoyer le nom de fichier (au cas où)
+  filename <- paste0(output_dir, "ndvi_prop_500m_commune_", bfs_nummer, ".tif")
+  
+  writeRaster(raster_to_save, filename, overwrite = TRUE)
+  
+  message("Exporté : ", filename)
+}
+
+## 200 m 
+# output_dir <- "data_output/ndvi_prop_200m/"
+# if (!dir.exists(output_dir)) {
+#   dir.create(output_dir, recursive = TRUE)
+# }
+# 
+# # Exporter chaque raster dans la liste
+# for (bfs_nummer in names(list_prop_rasters)) {
+#   raster_to_save <- list_prop_rasters[[bfs_nummer]]
+#   
+#   # Nettoyer le nom de fichier (au cas où)
+#   filename <- paste0(output_dir, "ndvi_prop_200m_commune_", bfs_nummer, ".tif")
+#   
+#   writeRaster(raster_to_save, filename, overwrite = TRUE)
+#   
+#   message("Exporté : ", filename)
+# }
+```
+
+## Extraction ssep
+
+```{r}
+
+library(dplyr)
+library(purrr)
+library(terra)
+library(sf)
+
+# 1. Filtrer et splitter par commune
+df_filtered <- sep_cross_noise_no2 %>%
+  filter(bfs_nummer %in% list_cities_10) %>%
+  group_by(bfs_nummer)
+
+list_points_par_commune <- df_filtered %>%
+  group_split()
+
+names(list_points_par_commune) <- df_filtered %>%
+  group_keys() %>%
+  pull(bfs_nummer) %>%
+  as.character()
+
+
+
+# 2. Fonction d'extraction pour une commune
+extract_vals_commune <- function(points_df, raster, method = "bilinear") {
+  points_sf <- st_as_sf(points_df, coords = c("longitude", "latitude"), crs = 2056) # adapte coords et crs
+  points_vect <- vect(points_sf)
+  
+  vals <- terra::extract(raster, points_vect, method = method)
+  
+  # Fusionner résultats à points_df (en conservant l'ordre)
+  points_df$val_extracted <- vals[, 2]
+  return(points_df)
+}
+
+# Réordonner list_points_par_commune dans l’ordre de list_prop_rasters
+list_points_par_commune_ordered <- list_points_par_commune[names(list_prop_rasters)]
+# 200m
+list_points_par_commune_ordered_200 <- list_points_par_commune[names(list_prop_rasters_200)]
+
+# 3. Application sur toutes les communes, en associant à chaque fois le raster focal correspondant
+results <- map2(list_points_par_commune_ordered, list_prop_rasters, ~ extract_vals_commune(.x, .y))
+
+results_200 <- map2(list_points_par_commune_ordered, list_prop_rasters_200, ~ extract_vals_commune(.x, .y))
+
+
+# 4. Fusionner tous les résultats en un seul data.frame
+final_results <- bind_rows(results)
+final_results_200 <- bind_rows(results_200)
+
+```
+
+# Merge des résultats et export
+
+```{r}
+
+final_results_for_export <- final_results %>% 
+  select(id, val_extracted) %>% 
+  rename(ndvi_500m = val_extracted) %>% 
+  st_drop_geometry()
+
+final_results_for_export_200 <- final_results %>% 
+  select(id, val_extracted) %>% 
+  rename(ndvi_200m = val_extracted) %>% 
+  st_drop_geometry()
+
+sep_cross_noise_no2 %>%
+  left_join(final_results_for_export) %>% 
+  left_join(final_results_for_export_200) %>% 
+  write_sf("data_input/data_edit/sep_cross_noise_no2_ndvi.gpkg")
+```
+
+# Check results
+
+```{r}
+
+df_ndvi_results <- final_results
+
+df_ndvi_results %>% 
+  group_by(ssep3_d) %>% 
+  summarise(
+    mean_ndvi = mean(val_extracted),
+    median_ndvi = median(val_extracted)
+  )
+```
