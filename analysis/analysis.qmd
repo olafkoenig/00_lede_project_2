@@ -281,7 +281,7 @@ summary_dw %>%
 
 # Cities
 
-**Sort each commune by quantiles (within-commune quantiles) and compute indicators by decile at the commune level**
+## **Sort each commune by quantiles (within-commune quantiles) and compute indicators by decile at the commune level**
 
 ### Function
 
@@ -300,7 +300,13 @@ analyser_commune <- function(df_commune, cities_pop) {
     mutate(
       ssep3d_local_4 = ntile(ssep3, 4),
       ssep3d_local_5 = ntile(ssep3, 5),
-      ssep3d_local_10 = ntile(ssep3, 10)
+      ssep3d_local_10 = ntile(ssep3, 10),
+      
+      # calcul des quantiles pour les indicateurs
+      noise_5 = ntile(noise, 5),
+      no2_5 = ntile(no2, 5),
+      ndvi_200m_5 = ntile(ndvi_200m, 5)
+
       ) %>%
     ungroup()
   
@@ -331,7 +337,7 @@ analyser_commune <- function(df_commune, cities_pop) {
 
 ```
 
-#### Call Function
+#### Function call
 
 ```{r}
 #  Appliquer à chaque commune, puis rassembler
@@ -511,7 +517,7 @@ all_stats <- map_dfr(resultats_list, "stats")
 
 commune_ids <- unique(all_stats$bfs_nummer)
 
-walk(commune_ids, ~ plot_commune(all_stats, ssep_col = "ssep3d_local_4", commune_id = .x))
+walk(commune_ids, ~ plot_commune(all_stats, ssep_col = "ssep3d_local_5", commune_id = .x))
 
 ```
 
@@ -543,4 +549,110 @@ cities_points_ssep_reclassified %>%
   theme_minimal()
 ```
 
-### DW Test scatterplot
+### DW Template scatterplot - one per cities
+
+<https://app.datawrapper.de/edit/zA7Km/visualize#annotate>
+
+```{r}
+
+dw_create_scatterplot <- function(df, city = bfs_nummer, var = "ndvi_200m", chartid) {
+  df_filtered = df %>% 
+    filter(bfs_nummer == city) %>% 
+    st_drop_geometry()
+  
+  dw_df = df_filtered %>% 
+    select(bfs_nummer, nom_officiel, ssep3, var) %>% 
+    dw_data_to_chart(chartid)
+}
+```
+
+```{r}
+
+dw_create_scatterplot(df = cities_points_ssep_reclassified, 
+                city = 230,
+                var = "ndvi_200m",
+                chartid = "zA7Km")
+```
+
+### DW Test scatterplot - one per cities BATCH
+
+### Batch function
+
+```{r}
+
+library(dplyr)
+library(purrr)
+library(DatawRappr)
+
+dw_batch_scatterplots <- function(
+  df,
+  bfs_list,
+  var,
+  templatechart_id,
+  dw_folderid,
+  output_chart_infos = "chart_ids.RData"
+) {
+  # Fonction pour traiter UNE ville
+  create_city_chart <- function(city_id) {
+    df_city <- df %>%
+      filter(bfs_nummer == city_id) %>%
+      st_drop_geometry()
+    city_name <- unique(df_city$nom_officiel)
+    if(length(city_name) != 1) city_name <- as.character(city_id)
+    
+    # Copier le chart template (renvoie un objet, il faut extraire l'id)
+    new_chart <- dw_copy_chart(templatechart_id)
+    new_chart_id <- new_chart[["id"]]
+    
+    # Mettre à jour le titre et le dossier avec dw_edit_chart
+    dw_edit_chart(
+      chart_id = new_chart_id,
+      title = city_name,
+      folderId = dw_folderid
+    )
+    
+    # Envoyer les données filtrées (var renommée en 'value' pour Datawrapper)
+    dw_data_to_chart(
+      df_city %>% select(bfs_nummer, nom_officiel, ssep3, value = all_of(var)),
+      chart_id = new_chart_id
+    )
+    
+    # Publier le graphique
+    published_chart <- dw_publish_chart(new_chart_id, return_object = TRUE)
+    
+    # Retourner les infos dans un tibble (tout est un vecteur !)
+    tibble(
+      city_id = city_id,
+      city_name = city_name,
+      url = published_chart$publicUrl,
+      iframe = published_chart$iframeCode,
+      chart_id = new_chart_id
+    )
+  }
+  
+  # Appliquer à chaque ville de la liste
+  chart_infos <- purrr::map_dfr(bfs_list, create_city_chart)
+  saveRDS(chart_infos, output_chart_infos)
+  chart_infos
+}
+
+```
+
+### Batch production (function call)
+
+```{r}
+
+cities_ids <- unique(cities_points_ssep_reclassified$bfs_nummer)
+dw_folder_id <- "335667"
+template_chart_id <- "zA7Km"
+
+chart_infos <- dw_batch_scatterplots(
+  df = cities_points_ssep_reclassified,
+  bfs_list = cities_ids,
+  var = "ndvi_200m",
+  templatechart_id = template_chart_id,
+  dw_folderid = dw_folder_id,
+  output_chart_infos = "data_output/cities_scatter_ids.RData"
+)
+
+```
