@@ -1,0 +1,339 @@
+---
+title: "analysis_cities"
+author: "olaf könig"
+format: html
+editor: visual
+---
+
+# Loading data
+
+```{r}
+
+sf_municipalities <- read_sf("data_input/data_raw/sf_polg_swisstopo.gpkg")
+
+df_cities_pop <- read_csv("data_input/data_raw/stats_cities.csv") %>% 
+  select(bfs_nummer,nom_officiel, POP_2023)
+
+list_cities_10 <- cities_pop %>% 
+  slice_max(POP_2023, n=10) %>% 
+  pull(bfs_nummer)
+
+list_cities_6 <- cities_pop %>% 
+  slice_max(POP_2023, n=6) %>% 
+  pull(bfs_nummer)
+
+sf_cities_10 <- sf_municipalities %>% 
+  filter(bfs_nummer %in% list_cities_10)
+
+sf_cities_6 <- sf_municipalities %>% 
+  filter(bfs_nummer %in% list_cities_6)
+```
+
+```{r}
+
+cities_translation <-tibble::tibble(
+  bfs_nummer = c(261, 6621, 2701, 5586, 351, 230, 1061, 3203, 5192, 371),
+  name_en = c(
+    "Zurich",
+    "Geneva",
+    "Basel",
+    "Lausanne",
+    "Bern",
+    "Winterthur",
+    "Lucerne",
+    "St. Gallen",
+    "Lugano",
+    "Biel/Bienne"
+  )
+)
+```
+
+```{r}
+
+sf <- read_sf("data_input/data_edit/sep_cross_noise_no2_ndvi.gpkg") %>% select(ssep3:geom) %>% select(id, bfs_nummer, everything()) %>% 
+  filter(bfs_nummer %in% list_cities_10) %>% 
+  left_join(cities_translation)
+```
+
+# Edit data
+
+Create a list of sf object for each cities
+
+```{r}
+
+list_sf_by_commune <- sf %>%
+  left_join(cities_translation) %>% 
+  filter(bfs_nummer %in% list_cities_10) %>%
+  { split(., .$bfs_nummer) }
+```
+
+View list (optional)
+
+```{r}
+# library(listviewer)
+# jsonedit(list_sf_by_commune)
+```
+
+## Reclassify ssep and classify for noise, no2 and ndvi
+
+```{r}
+
+library(dplyr)
+library(purrr)
+
+prepare_groupings <- function(df) {
+  df %>%
+    mutate(
+      ssep3d_local_4  = ntile(ssep3, 4),
+      ssep3d_local_5  = ntile(ssep3, 5),
+      ssep3d_local_10 = ntile(ssep3, 10),
+      noise_4  = ntile(noise, 4),
+      noise_5  = ntile(noise, 5),
+      noise_10 = ntile(noise, 10),
+      no2_4    = ntile(no2, 4),
+      no2_5    = ntile(no2, 5),
+      no2_10   = ntile(no2, 10),
+      ndvi_200m_4  = ntile(ndvi_200m, 4),
+      ndvi_200m_5  = ntile(ndvi_200m, 5),
+      ndvi_200m_10 = ntile(ndvi_200m, 10)
+    )
+}
+
+list_sf_by_commune_grouped <- map(list_sf_by_commune, prepare_groupings)
+
+```
+
+## Compute agregated statistics for each quantiles
+
+```{r}
+
+summarise_by_grouping <- function(sf_commune, grouping_var) {
+  sf_commune %>%
+    st_drop_geometry() %>%
+    group_by(bfs_nummer, .data[[grouping_var]]) %>%
+    summarise(
+      n = n(),
+      pct_above_50_noise = mean(noise > 50) * 100,
+      pct_above_60_noise = mean(noise > 60) * 100,
+      pct_above_15_no2   = mean(no2 > 15) * 100,
+      pct_above_20_no2   = mean(no2 > 20) * 100,
+      pct_above_50_ndvi  = mean(ndvi_200m > 0.5) * 100,
+      pct_above_60_ndvi  = mean(ndvi_200m > 0.6) * 100,
+      .groups = "drop"
+    )
+}
+
+# For quintiles
+df_stats_quintiles <- map_dfr(
+  list_sf_by_commune_grouped,
+  summarise_by_grouping,
+  grouping_var = "ssep3d_local_5"
+)
+# For quartiles
+df_stats_quartiles <- map_dfr(
+  list_sf_by_commune_grouped,
+  summarise_by_grouping,
+  grouping_var = "ssep3d_local_4"
+)
+# For deciles
+df_stats_deciles <- map_dfr(
+  list_sf_by_commune_grouped,
+  summarise_by_grouping,
+  grouping_var = "ssep3d_local_10"
+)
+```
+
+### Merge the results into one df and transforme to long
+
+```{r}
+df_stats_deciles   <- mutate(df_stats_deciles,   quantile_type = "Déciles")
+df_stats_quintiles <- mutate(df_stats_quintiles, quantile_type = "Quintiles")
+df_stats_quartiles <- mutate(df_stats_quartiles, quantile_type = "Quartiles")
+
+df_stats_deciles <- df_stats_deciles %>%
+  rename(group = ssep3d_local_10) %>%
+  select(bfs_nummer, group, starts_with("pct_above"), quantile_type)
+df_stats_quintiles <- df_stats_quintiles %>%
+  rename(group = ssep3d_local_5) %>%
+  select(bfs_nummer, group, starts_with("pct_above"), quantile_type)
+df_stats_quartiles <- df_stats_quartiles %>%
+  rename(group = ssep3d_local_4) %>%
+  select(bfs_nummer, group, starts_with("pct_above"), quantile_type)
+
+
+df_stats_all <- bind_rows(df_stats_deciles, df_stats_quintiles, df_stats_quartiles)
+
+df_stats_long <- df_stats_all %>%
+  pivot_longer(
+    cols = starts_with("pct_above"),
+    names_to = "indicator",
+    values_to = "value"
+  ) %>%
+  mutate(
+    indicator_label = recode(indicator,
+      "pct_above_50_noise" = "Bruit > 50 dB",
+      "pct_above_60_noise" = "Bruit > 60 dB",
+      "pct_above_15_no2" = "NO2 > 15",
+      "pct_above_20_no2" = "NO2 > 20",
+      "pct_above_50_ndvi" = "NDVI > 0.5 (vert)",
+      "pct_above_60_ndvi" = "NDVI > 0.6 (plus vert)"
+    )
+  ) %>% 
+  left_join(cities_translation)
+
+
+df_stats_long <- df_stats_long %>%
+  mutate(
+    indicator_family = case_when(
+      grepl("noise", indicator) ~ "Bruit",
+      grepl("no2", indicator) ~ "NO2",
+      grepl("ndvi", indicator) ~ "NDVI"
+    )
+  )
+
+```
+
+Colors
+
+```{r}
+
+df_stats_long <- df_stats_long %>%
+  mutate(
+    indicator_color = case_when(
+      indicator_label == "Bruit > 50 dB"      ~ "#FC9272",
+      indicator_label == "Bruit > 60 dB"      ~ "#BA4625",
+      indicator_label == "NO2 > 15"           ~ "#9ECAE1",
+      indicator_label == "NO2 > 20"           ~ "#4882A1",
+      indicator_label == "NDVI > 0.5 (vert)"  ~ "#A1D99B",
+      indicator_label == "NDVI > 0.6 (plus vert)" ~ "#459A3C"
+    )
+  )
+```
+
+## Visualise
+
+```{r}
+
+df_minimal <- df_stats_long %>%
+  filter(
+    indicator_label %in% c(
+      "Bruit > 50 dB",
+      "NO2 > 20",
+      "NDVI > 0.5 (vert)"
+    )
+  )
+
+```
+
+```{r}
+
+city_code <- df_minimal %>% filter(name_en == "Zurich") %>% pull(bfs_nummer) %>% unique()
+plot_city(city_code)
+
+```
+
+## Batch chart svg export
+
+```{r}
+
+output_dir <- "data_output/city_charts_minimal_svg/"
+dir_create(output_dir)
+
+unique_codes <- unique(df_minimal$bfs_nummer)
+
+plot_city <- function(city_code) {
+  df_city <- df_minimal %>% filter(bfs_nummer == city_code)
+  ggplot(
+    df_city,
+    aes(
+      y = factor(group),
+      x = value,
+      fill = indicator_label
+    )
+  ) +
+    geom_col(
+      width = 0.7,
+      position = position_dodge(width = 0.8)
+    ) +
+    geom_text(
+      aes(label = sprintf("%.1f", value), colour = indicator_label),
+      position = position_dodge(width = 0.8),
+      hjust = -0.15,
+      size = 3.2,
+      family = "IBM Plex Sans"
+    ) +
+    scale_fill_manual(
+      values = c(
+        "Bruit > 50 dB" = "#FC9272",
+        "NO2 > 20" = "#4882A1",
+        "NDVI > 0.5 (vert)" = "#A1D99B"
+      )
+    ) +
+    scale_colour_manual(
+      values = c(
+        "Bruit > 50 dB" = "#FC9272",
+        "NO2 > 20" = "#4882A1",
+        "NDVI > 0.5 (vert)" = "#A1D99B"
+      )
+    ) +
+    facet_grid(quantile_type ~ indicator_family, switch = "y") +
+    labs(
+      title = paste("Expositions environnementales –", unique(df_city$name_en)),
+      y = "Groupe local",
+      x = "Ménages exposés (%)",
+      fill = NULL
+    ) +
+    theme_minimal(base_family = "IBM Plex Sans") +
+    theme(
+      strip.text = element_text(face = "bold"),
+      axis.title.y = element_text(face = "bold"),
+      axis.title.x = element_text(face = "bold"),
+      legend.position = "bottom"
+    ) +
+    coord_cartesian(xlim = c(0, max(df_city$value, na.rm = TRUE) * 1.15))
+}
+
+walk(unique_codes, ~{
+  g <- plot_city(.x)
+  ggsave(
+    filename = path(output_dir, paste0("city_", .x, ".svg")),
+    plot = g,
+    width = 8, height = 5
+  )
+  invisible(NULL) # Pour éviter tout print dans la boucle
+})
+
+```
+
+## DW lollipop
+
+<https://app.datawrapper.de/edit/iLHkd/visualize#refine>
+
+```{r}
+
+dw_cities_lolipop <- df_stats_long %>% 
+  filter(quantile_type == "Quartiles") %>% 
+  filter(group %in% c(1, 4)) %>% 
+  filter(
+    indicator_label %in% c(
+      "Bruit > 50 dB",
+      "NO2 > 15",
+      "NDVI > 0.5 (vert)"
+    )
+  ) %>% 
+  select(bfs_nummer, name_en, group, indicator_label, value) %>% 
+  pivot_wider(
+    names_from = "group",
+    values_from = "value"
+  ) %>% 
+  rename(
+    "Lowest SES" = `1`,
+    "Highest SES" = `4`
+  )
+```
+
+```{r}
+
+dw_cities_lolipop %>% 
+  dw_data_to_chart("iLHkd")
+```

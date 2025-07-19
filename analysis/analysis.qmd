@@ -34,6 +34,27 @@ df <- sf %>% st_drop_geometry()
 
 ```
 
+Creating translations
+
+```{r}
+
+cities_translation <-tibble::tibble(
+  bfs_nummer = c(261, 6621, 2701, 5586, 351, 230, 1061, 3203, 5192, 371),
+  name_en = c(
+    "Zurich",
+    "Geneva",
+    "Basel",
+    "Lausanne",
+    "Bern",
+    "Winterthur",
+    "Lucerne",
+    "St. Gallen",
+    "Lugano",
+    "Biel/Bienne"
+  )
+)
+```
+
 Cities population and lists
 
 ```{r}
@@ -61,6 +82,7 @@ Split the sf datasets into cities sf
 ```{r}
 
 list_sf_by_commune <- sf %>%
+  left_join(cities_translation) %>% 
   filter(bfs_nummer %in% list_cities_10) %>%
   { split(., .$bfs_nummer) }
 ```
@@ -304,8 +326,16 @@ analyser_commune <- function(df_commune, cities_pop) {
       
       # calcul des quantiles pour les indicateurs
       noise_5 = ntile(noise, 5),
+      noise_4 = ntile(noise, 4),
+      noise_10 = ntile(noise, 10),
+
       no2_5 = ntile(no2, 5),
-      ndvi_200m_5 = ntile(ndvi_200m, 5)
+      no2_4 = ntile(no2, 4),
+      no2_10 = ntile(no2, 10),
+
+      ndvi_200m_5 = ntile(ndvi_200m, 5),
+      ndvi_200m_4 = ntile(ndvi_200m, 4),
+      ndvi_200m_10 = ntile(ndvi_200m, 10)
 
       ) %>%
     ungroup()
@@ -343,6 +373,8 @@ analyser_commune <- function(df_commune, cities_pop) {
 #  Appliquer à chaque commune, puis rassembler
 resultats_list <- map(list_sf_by_commune, analyser_commune, cities_pop = cities_pop)
 
+library(listviewer)
+jsonedit(resultats_list)
 
 # # Visualiser le résultat
 # print(resultats_list)
@@ -549,6 +581,44 @@ cities_points_ssep_reclassified %>%
   theme_minimal()
 ```
 
+# CLASSIFIED BY QUANTILE FOR EACH COMBINATION SSEP-POLLUTION AND SSEP-GREENSPACES
+
+```{r}
+
+cities_points_ssep_reclassified_pairs <- cities_points_ssep_reclassified %>%
+  mutate(
+    ssep_noise_pair = paste0(ssep3d_local_5, "-", noise_5),
+    ssep_no2_pair   = paste0(ssep3d_local_5, "-", no2_5),
+    ssep_ndvi_pair  = paste0(ssep3d_local_5, "-", ndvi_200m_5)
+  ) %>% 
+  
+  mutate(
+    ssep_noise_label = case_when(
+      ssep3d_local_5 == 1 & noise_5 == 1 ~ "Low S.E.S. / Low Noise",
+      ssep3d_local_5 == 1 & noise_5 == 5 ~ "Low S.E.S. / High Noise",
+      ssep3d_local_5 == 5 & noise_5 == 1 ~ "High S.E.S. / Low Noise",
+      ssep3d_local_5 == 5 & noise_5 == 5 ~ "High S.E.S. / High Noise",
+      TRUE ~ "Other combination"
+    ),
+    ssep_no2_label = case_when(
+      ssep3d_local_5 == 1 & no2_5 == 1 ~ "Low S.E.S. / Low NO₂",
+      ssep3d_local_5 == 1 & no2_5 == 5 ~ "Low S.E.S. / High NO₂",
+      ssep3d_local_5 == 5 & no2_5 == 1 ~ "High S.E.S. / Low NO₂",
+      ssep3d_local_5 == 5 & no2_5 == 5 ~ "High S.E.S. / High NO₂",
+      TRUE ~ "Other combination"
+    ),
+    ssep_ndvi_label = case_when(
+      ssep3d_local_5 == 1 & ndvi_200m_5 == 1 ~ "Low S.E.S. / Low Greenness",
+      ssep3d_local_5 == 1 & ndvi_200m_5 == 5 ~ "Low S.E.S. / High Greenness",
+      ssep3d_local_5 == 5 & ndvi_200m_5 == 1 ~ "High S.E.S. / Low Greenness",
+      ssep3d_local_5 == 5 & ndvi_200m_5 == 5 ~ "High S.E.S. / High Greenness",
+      TRUE ~ "Other combination"
+    )
+  )
+
+
+```
+
 ### DW Template scatterplot - one per cities
 
 <https://app.datawrapper.de/edit/zA7Km/visualize#annotate>
@@ -561,14 +631,14 @@ dw_create_scatterplot <- function(df, city = bfs_nummer, var = "ndvi_200m", char
     st_drop_geometry()
   
   dw_df = df_filtered %>% 
-    select(bfs_nummer, nom_officiel, ssep3, var) %>% 
+    select(bfs_nummer, nom_officiel, ssep3, var, ssep_ndvi_label) %>% 
     dw_data_to_chart(chartid)
 }
 ```
 
 ```{r}
 
-dw_create_scatterplot(df = cities_points_ssep_reclassified, 
+dw_create_scatterplot(df = cities_points_ssep_reclassified_pairs, 
                 city = 230,
                 var = "ndvi_200m",
                 chartid = "zA7Km")
@@ -597,7 +667,8 @@ dw_batch_scatterplots <- function(
     df_city <- df %>%
       filter(bfs_nummer == city_id) %>%
       st_drop_geometry()
-    city_name <- unique(df_city$nom_officiel)
+    city_name <- unique(df_city$name_en)
+    city_name <- paste0('<span style="font-size: 0.8em;">', city_name, '</span>')
     if(length(city_name) != 1) city_name <- as.character(city_id)
     
     # Copier le chart template (renvoie un objet, il faut extraire l'id)
@@ -613,7 +684,7 @@ dw_batch_scatterplots <- function(
     
     # Envoyer les données filtrées (var renommée en 'value' pour Datawrapper)
     dw_data_to_chart(
-      df_city %>% select(bfs_nummer, nom_officiel, ssep3, value = all_of(var)),
+      df_city %>% select(ssep3, value = all_of(var), ssep_ndvi_label),
       chart_id = new_chart_id
     )
     
@@ -642,12 +713,12 @@ dw_batch_scatterplots <- function(
 
 ```{r}
 
-cities_ids <- unique(cities_points_ssep_reclassified$bfs_nummer)
+cities_ids <- unique(cities_points_ssep_reclassified_pairs$bfs_nummer)
 dw_folder_id <- "335667"
 template_chart_id <- "zA7Km"
 
 chart_infos <- dw_batch_scatterplots(
-  df = cities_points_ssep_reclassified,
+  df = cities_points_ssep_reclassified_pairs,
   bfs_list = cities_ids,
   var = "ndvi_200m",
   templatechart_id = template_chart_id,
