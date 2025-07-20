@@ -54,6 +54,7 @@ sf <- read_sf("data_input/data_edit/sep_cross_noise_no2_ndvi.gpkg") %>% select(s
   filter(bfs_nummer %in% list_cities_10) %>% 
   left_join(cities_translation)
 
+# Invert the logic of NDVI indicator from more NDVI >= 0.5 to NDVI <= 0.5 (lack of green spaces)
 sf <- sf %>%
   mutate(
     ndvi_200m = 1 - ndvi_200m,
@@ -573,6 +574,51 @@ chart_results <- dw_batch_charts_by_indicator(
   bfs_list = bfs_list,
   output_chart_infos = "data_output/scatterplot_chart_ids.RData"
 )
+
+```
+
+```{r}
+
+chart_results %>% filter(city_id %in% list_cities_6) %>% select(city_id, iframe) %>% clipr::write_clip()
+```
+
+HTML Creation
+
+```{r}
+
+library(tidyr)
+library(dplyr)
+library(glue)
+
+chart_results_wide <- chart_results %>%
+  select(city_name, indicator, iframe) %>%
+  pivot_wider(names_from = indicator, values_from = iframe)
+
+html_blocks <- chart_results_wide %>%
+  mutate(
+    html = glue::glue(
+      '
+<div class="city-grid">
+  <div class="city-title">{city_name}</div>
+  <div>
+    <div class="indicator-label">Noise</div>
+    {noise}
+  </div>
+  <div>
+    <div class="indicator-label">NO₂</div>
+    {no2}
+  </div>
+  <div>
+    <div class="indicator-label">Green</div>
+    {green}
+  </div>
+</div>
+      '
+    )
+  ) %>% pull(html)
+
+cat(paste(html_blocks, collapse = "\n\n"))
+
 
 ```
 
