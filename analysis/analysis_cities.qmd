@@ -53,6 +53,12 @@ cities_translation <-tibble::tibble(
 sf <- read_sf("data_input/data_edit/sep_cross_noise_no2_ndvi.gpkg") %>% select(ssep3:geom) %>% select(id, bfs_nummer, everything()) %>% 
   filter(bfs_nummer %in% list_cities_10) %>% 
   left_join(cities_translation)
+
+sf <- sf %>%
+  mutate(
+    ndvi_200m = 1 - ndvi_200m,
+    ndvi_500m = 1 - ndvi_500m
+  )
 ```
 
 # Edit data
@@ -146,26 +152,43 @@ df_stats_deciles <- map_dfr(
 ### Merge the results into one df and transforme to long
 
 ```{r}
+
 df_stats_deciles   <- mutate(df_stats_deciles,   quantile_type = "Déciles")
 df_stats_quintiles <- mutate(df_stats_quintiles, quantile_type = "Quintiles")
 df_stats_quartiles <- mutate(df_stats_quartiles, quantile_type = "Quartiles")
 
 df_stats_deciles <- df_stats_deciles %>%
   rename(group = ssep3d_local_10) %>%
-  select(bfs_nummer, group, starts_with("pct_above"), quantile_type)
+  select(
+    bfs_nummer,
+    group,
+    quantile_type,
+    matches("^pct_above") # plus besoin de ^pct_below
+  )
+
 df_stats_quintiles <- df_stats_quintiles %>%
   rename(group = ssep3d_local_5) %>%
-  select(bfs_nummer, group, starts_with("pct_above"), quantile_type)
+  select(
+    bfs_nummer,
+    group,
+    quantile_type,
+    matches("^pct_above")
+  )
+
 df_stats_quartiles <- df_stats_quartiles %>%
   rename(group = ssep3d_local_4) %>%
-  select(bfs_nummer, group, starts_with("pct_above"), quantile_type)
-
+  select(
+    bfs_nummer,
+    group,
+    quantile_type,
+    matches("^pct_above")
+  )
 
 df_stats_all <- bind_rows(df_stats_deciles, df_stats_quintiles, df_stats_quartiles)
 
 df_stats_long <- df_stats_all %>%
   pivot_longer(
-    cols = starts_with("pct_above"),
+    cols = matches("^pct_above"),
     names_to = "indicator",
     values_to = "value"
   ) %>%
@@ -173,14 +196,13 @@ df_stats_long <- df_stats_all %>%
     indicator_label = recode(indicator,
       "pct_above_50_noise" = "Bruit > 50 dB",
       "pct_above_60_noise" = "Bruit > 60 dB",
-      "pct_above_15_no2" = "NO2 > 15",
-      "pct_above_20_no2" = "NO2 > 20",
-      "pct_above_50_ndvi" = "NDVI > 0.5 (vert)",
-      "pct_above_60_ndvi" = "NDVI > 0.6 (plus vert)"
+      "pct_above_15_no2"  = "NO2 > 15",
+      "pct_above_20_no2"  = "NO2 > 20",
+      "pct_above_50_ndvi" = "Limited green access (NDVI < 0.5)",
+      "pct_above_60_ndvi" = "Limited green access (NDVI < 0.6)"
     )
   ) %>% 
   left_join(cities_translation)
-
 
 df_stats_long <- df_stats_long %>%
   mutate(
@@ -199,13 +221,13 @@ Colors
 
 df_stats_long <- df_stats_long %>%
   mutate(
-    indicator_color = case_when(
-      indicator_label == "Bruit > 50 dB"      ~ "#FC9272",
-      indicator_label == "Bruit > 60 dB"      ~ "#BA4625",
-      indicator_label == "NO2 > 15"           ~ "#9ECAE1",
-      indicator_label == "NO2 > 20"           ~ "#4882A1",
-      indicator_label == "NDVI > 0.5 (vert)"  ~ "#A1D99B",
-      indicator_label == "NDVI > 0.6 (plus vert)" ~ "#459A3C"
+    indicator_label = recode(indicator,
+      "pct_above_50_noise" = "Exposed to noise >50 dB",
+      "pct_above_60_noise" = "Exposed to noise >60 dB",
+      "pct_above_15_no2"   = "Exposed to NO₂ >15 μg/m³",
+      "pct_above_20_no2"   = "Exposed to NO₂ >20 μg/m³",
+      "pct_above_50_ndvi"  = "Limited green access (NDVI < 0.5)",
+      "pct_above_60_ndvi"  = "Limited green access (NDVI < 0.6)"
     )
   )
 ```
@@ -217,18 +239,12 @@ df_stats_long <- df_stats_long %>%
 df_minimal <- df_stats_long %>%
   filter(
     indicator_label %in% c(
-      "Bruit > 50 dB",
-      "NO2 > 20",
-      "NDVI > 0.5 (vert)"
+      "Exposed to noise >50 dB",
+      "Exposed to NO₂ >20 μg/m³",
+      "Limited green access (NDVI < 0.5)"
     )
   )
-
-```
-
-```{r}
-
-city_code <- df_minimal %>% filter(name_en == "Zurich") %>% pull(bfs_nummer) %>% unique()
-plot_city(city_code)
+table(df_minimal$indicator_label)
 
 ```
 
@@ -264,23 +280,23 @@ plot_city <- function(city_code) {
     ) +
     scale_fill_manual(
       values = c(
-        "Bruit > 50 dB" = "#FC9272",
-        "NO2 > 20" = "#4882A1",
-        "NDVI > 0.5 (vert)" = "#A1D99B"
+        "Exposed to noise >50 dB"           = "#FC9272",  # orange
+        "Exposed to NO₂ >20 μg/m³"          = "#4882A1",  # bleu
+        "Limited green access (NDVI < 0.5)" = "#A1D99B"   # vert
       )
     ) +
     scale_colour_manual(
       values = c(
-        "Bruit > 50 dB" = "#FC9272",
-        "NO2 > 20" = "#4882A1",
-        "NDVI > 0.5 (vert)" = "#A1D99B"
+        "Exposed to noise >50 dB"           = "#FC9272",
+        "Exposed to NO₂ >20 μg/m³"          = "#4882A1",
+        "Limited green access (NDVI < 0.5)" = "#A1D99B"
       )
     ) +
     facet_grid(quantile_type ~ indicator_family, switch = "y") +
     labs(
-      title = paste("Expositions environnementales –", unique(df_city$name_en)),
-      y = "Groupe local",
-      x = "Ménages exposés (%)",
+      title = paste("Environmental exposures –", unique(df_city$name_en)),
+      y = "Group (local SES quartile/quintile/decile)",
+      x = "Share of exposed households (%)",
       fill = NULL
     ) +
     theme_minimal(base_family = "IBM Plex Sans") +
@@ -300,28 +316,34 @@ walk(unique_codes, ~{
     plot = g,
     width = 8, height = 5
   )
-  invisible(NULL) # Pour éviter tout print dans la boucle
+  invisible(NULL)
 })
 
 ```
 
-## DW lollipop
+## DW lollipop chart to show disparities within the cities
 
 <https://app.datawrapper.de/edit/iLHkd/visualize#refine>
 
 ```{r}
-
 dw_cities_lolipop <- df_stats_long %>% 
-  filter(quantile_type == "Quartiles") %>% 
-  filter(group %in% c(1, 4)) %>% 
   filter(
+    quantile_type == "Quartiles",
+    group %in% c(1, 4),
     indicator_label %in% c(
-      "Bruit > 50 dB",
-      "NO2 > 15",
-      "NDVI > 0.5 (vert)"
+      "Exposed to noise >50 dB",
+      "Exposed to NO₂ >15 μg/m³",
+      "Limited green access (NDVI < 0.5)"
     )
   ) %>% 
   select(bfs_nummer, name_en, group, indicator_label, value) %>% 
+  mutate(
+    indicator_label_en = case_when(
+      indicator_label == "Exposed to noise >50 dB" ~ "Households exposed to noise >50 dB",
+      indicator_label == "Exposed to NO₂ >15 μg/m³" ~ "Households exposed to NO₂ >15 μg/m³",
+      indicator_label == "Limited green access (NDVI < 0.5)" ~ 'Households with limited green access: less than 50% of "green" surfaces within 200m'
+    )
+  ) %>% 
   pivot_wider(
     names_from = "group",
     values_from = "value"
@@ -330,10 +352,233 @@ dw_cities_lolipop <- df_stats_long %>%
     "Lowest SES" = `1`,
     "Highest SES" = `4`
   )
+
 ```
 
 ```{r}
 
 dw_cities_lolipop %>% 
   dw_data_to_chart("iLHkd")
+```
+
+# Scatterplot charts
+
+### Classification in quartles (string)
+
+```{r}
+
+sf_grouped <- bind_rows(list_sf_by_commune_grouped)
+
+sf_grouped <- sf_grouped %>%
+  mutate(
+    # Paires SES avec chaque variable
+    ssep_noise_pair = paste0("SES", ssep3d_local_4, "-Noise", noise_4),
+    ssep_no2_pair   = paste0("SES", ssep3d_local_4, "-NO2", no2_4),
+    ssep_ndvi_pair  = paste0("SES", ssep3d_local_4, "-Green", ndvi_200m_4),
+    
+    # Labels explicites avec inversion corrigée : 1 = Low SES, 4 = High SES
+    ssep_noise_label = case_when(
+      ssep3d_local_4 == 1 & noise_4 == 4 ~ "Low SES / High Noise",
+      ssep3d_local_4 == 1 & noise_4 == 1 ~ "Low SES / Low Noise",
+      ssep3d_local_4 == 4 & noise_4 == 4 ~ "High SES / High Noise",
+      ssep3d_local_4 == 4 & noise_4 == 1 ~ "High SES / Low Noise",
+      TRUE ~ "Other combination"
+    ),
+    ssep_no2_label = case_when(
+      ssep3d_local_4 == 1 & no2_4 == 4 ~ "Low SES / High NO₂",
+      ssep3d_local_4 == 1 & no2_4 == 1 ~ "Low SES / Low NO₂",
+      ssep3d_local_4 == 4 & no2_4 == 4 ~ "High SES / High NO₂",
+      ssep3d_local_4 == 4 & no2_4 == 1 ~ "High SES / Low NO₂",
+      TRUE ~ "Other combination"
+    ),
+    ssep_ndvi_label = case_when(
+      ssep3d_local_4 == 1 & ndvi_200m_4 == 4 ~ "Low SES / Low Green",
+      ssep3d_local_4 == 1 & ndvi_200m_4 == 1 ~ "Low SES / High Green",
+      ssep3d_local_4 == 4 & ndvi_200m_4 == 4 ~ "High SES / Low Green",
+      ssep3d_local_4 == 4 & ndvi_200m_4 == 1 ~ "High SES / High Green",
+      TRUE ~ "Other combination"
+    ),
+    # Combinaison globale (corrigée)
+    ssep_global_label = paste0(
+      ifelse(ssep3d_local_4 == 1, "Low SES", ifelse(ssep3d_local_4 == 4, "High SES", "Mid SES")), " / ",
+      ifelse(no2_4 == 1, "Low NO₂", ifelse(no2_4 == 4, "High NO₂", "Mid NO₂")), " / ",
+      ifelse(noise_4 == 1, "Low Noise", ifelse(noise_4 == 4, "High Noise", "Mid Noise")), " / ",
+      ifelse(ndvi_200m_4 == 1, "Low Green", ifelse(ndvi_200m_4 == 4, "High Green", "Mid Green"))
+    )
+  )
+
+```
+
+## Making scatterplot template
+
+#### Helper: descritptive statistics to adjust axes
+
+```{r}
+
+desc_stats <- function(x, na.rm = TRUE) {
+  data.frame(
+    min = min(x, na.rm = na.rm),
+    q10 = quantile(x, 0.1, na.rm = na.rm),
+    q25 = quantile(x, 0.25, na.rm = na.rm),
+    median = quantile(x, 0.5, na.rm = na.rm),
+    q75 = quantile(x, 0.75, na.rm = na.rm),
+    q90 = quantile(x, 0.9, na.rm = na.rm),
+    max = max(x, na.rm = na.rm)
+  )
+}
+
+# desc_stats(sf_grouped$ndvi_200m)
+# desc_stats(sf_grouped$no2)
+# desc_stats(sf_grouped$noise)
+```
+
+### Template noise
+
+<https://app.datawrapper.de/edit/fTu0m/upload>
+
+```{r}
+
+sf_grouped %>% 
+  st_drop_geometry() %>% 
+  filter(bfs_nummer == 230) %>% 
+  select(ssep3, noise, ssep_noise_label) %>% 
+  dw_data_to_chart("fTu0m")
+```
+
+### Template NO2
+
+<https://app.datawrapper.de/edit/i3eIP/visualize#annotate>
+
+```{r}
+
+sf_grouped %>% 
+  st_drop_geometry() %>% 
+  filter(bfs_nummer == 230) %>% 
+  select(ssep3, no2, ssep_no2_label) %>% 
+  dw_data_to_chart("i3eIP")
+```
+
+### Template Green
+
+<https://app.datawrapper.de/edit/yVzPw/visualize#annotate>
+
+```{r}
+
+sf_grouped %>% 
+  st_drop_geometry() %>% 
+  filter(bfs_nummer == 230) %>% 
+  select(ssep3, ndvi_200m, ssep_ndvi_label) %>%
+  mutate(ndvi_200m = ndvi_200m * 100) %>% 
+  dw_data_to_chart("yVzPw")
+```
+
+## DW Scatterplot batch production
+
+```{r}
+
+library(dplyr)
+library(purrr)
+library(DatawRappr)
+
+dw_batch_charts_by_indicator <- function(
+  df,
+  bfs_list,
+  template_ids = list(
+    noise = "fTu0m",
+    no2   = "i3eIP",
+    green = "yVzPw"
+  ),
+  folder_ids = list(
+    noise = "335712",
+    no2   = "335711",
+    green = "335713"
+  ),
+  output_chart_infos = "chart_ids.RData"
+) {
+  indicator_vars <- list(
+    noise = list(var = "noise", label = "ssep_noise_label"),
+    no2   = list(var = "no2", label = "ssep_no2_label"),
+    green = list(var = "ndvi_200m", label = "ssep_ndvi_label")
+  )
+  
+  create_city_chart <- function(city_id, indicator) {
+    var_info <- indicator_vars[[indicator]]
+    template_id <- template_ids[[indicator]]
+    folder_id <- folder_ids[[indicator]]
+    
+    df_city <- df %>%
+      filter(bfs_nummer == city_id) %>%
+      st_drop_geometry()
+    city_name <- unique(df_city$name_en)
+    city_name <- paste0('<span style="font-size: 0.8em;">', city_name, '</span>')
+    if(length(city_name) != 1) city_name <- as.character(city_id)
+    
+    new_chart <- dw_copy_chart(template_id)
+    new_chart_id <- new_chart[["id"]]
+    
+    dw_edit_chart(
+      chart_id = new_chart_id,
+      title = city_name,
+      folderId = folder_id
+    )
+    
+    data_to_send <- df_city %>%
+      select(
+        ssep3,
+        value = all_of(var_info$var),
+        indicator_label = all_of(var_info$label)
+      )
+    if (indicator == "green") {
+      data_to_send <- data_to_send %>% mutate(value = value * 100)
+    }
+    
+    dw_data_to_chart(
+      data_to_send,
+      chart_id = new_chart_id
+    )
+    
+    published_chart <- dw_publish_chart(new_chart_id, return_object = TRUE)
+    
+    tibble(
+      city_id = city_id,
+      city_name = city_name,
+      indicator = indicator,
+      url = published_chart$publicUrl,
+      iframe = published_chart$iframeCode,
+      chart_id = new_chart_id
+    )
+  }
+  
+  chart_infos <- purrr::cross_df(list(
+    city_id = bfs_list,
+    indicator = names(template_ids)
+  )) %>%
+    pmap_dfr(~create_city_chart(..1, ..2))
+  
+  saveRDS(chart_infos, output_chart_infos)
+  chart_infos
+}
+
+```
+
+```{r}
+
+bfs_list <- sf_grouped %>% 
+  st_drop_geometry() %>% 
+  pull(bfs_nummer) %>% 
+  unique()
+
+chart_results <- dw_batch_charts_by_indicator(
+  df = sf_grouped,
+  bfs_list = bfs_list,
+  output_chart_infos = "data_output/scatterplot_chart_ids.RData"
+)
+
+```
+
+# Cartography cities
+
+```{r}
+
+
 ```
