@@ -579,10 +579,10 @@ chart_results <- dw_batch_charts_by_indicator(
 
 ```{r}
 
-chart_results %>% filter(city_id %in% list_cities_6) %>% select(city_id, iframe) %>% clipr::write_clip()
+# chart_results %>% filter(city_id %in% list_cities_6) %>% select(city_id, iframe) %>% clipr::write_clip()
 ```
 
-HTML Creation
+### HTML Small multiple panel creation
 
 ```{r}
 
@@ -622,9 +622,290 @@ cat(paste(html_blocks, collapse = "\n\n"))
 
 ```
 
-# Cartography cities
+# Cartography cities (6 cities)
 
 ```{r}
 
+sf_for_maps <- sf_grouped %>% 
+  filter(bfs_nummer %in% list_cities_6) %>% 
+  select(name_en, ssep_noise_label, ssep_no2_label, ssep_ndvi_label, ssep_global_label)
+```
+
+### Colors
+
+```{r}
+
+get_cat_color <- function(label, rouge, orange) {
+  case_when(
+    label == rouge  ~ "#E74C3C",  # Rouge
+    label == orange ~ "#FFA500",  # Orange
+    TRUE            ~ "#D3D3D3"   # Gris
+  )
+}
+
+sf_for_maps <- sf_grouped %>%
+  select(name_en, ssep_noise_label, ssep_no2_label, ssep_ndvi_label, ssep_global_label) %>%
+  mutate(
+    color_noise = get_cat_color(ssep_noise_label,  "Low SES / High Noise",  "High SES / Low Noise"),
+    color_no2   = get_cat_color(ssep_no2_label,    "Low SES / High NO₂",    "High SES / Low NO₂"),
+    color_ndvi  = get_cat_color(ssep_ndvi_label,   "Low SES / Low Green",   "High SES / High Green")
+  )
+
+```
+
+### Transform data to facetting
+
+```{r}
+
+library(tidyr)
+sf_for_maps_long <- sf_for_maps %>%
+  pivot_longer(
+    cols = starts_with("ssep_"),
+    names_to = "indicator",
+    values_to = "label"
+  ) %>%
+  pivot_longer(
+    cols = starts_with("color_"),
+    names_to = "indicator_color",
+    values_to = "color"
+  ) %>%
+  # On garde les bonnes paires label/couleur/indicateur
+  filter(
+    case_when(
+      indicator == "ssep_noise_label"  & indicator_color == "color_noise"  ~ TRUE,
+      indicator == "ssep_no2_label"    & indicator_color == "color_no2"    ~ TRUE,
+      indicator == "ssep_ndvi_label"   & indicator_color == "color_ndvi"   ~ TRUE,
+      TRUE ~ FALSE
+    )
+  ) %>%
+  mutate(
+    indicator = recode(indicator,
+      "ssep_noise_label" = "Noise",
+      "ssep_no2_label" = "NO₂",
+      "ssep_ndvi_label" = "Green"
+    )
+  )
+
+```
+
+### Test map for Lausanne
+
+```{r}
+tmap_mode(mode = "view")
+tm_shape(sf_for_maps_long %>% filter(name_en == "Lausanne")) +
+  tm_dots(fill = "color", size = 0.4, fill.legend = tm_legend_hide()) +
+  tm_facets_grid(rows = "indicator") +
+  tm_title("Lausanne – Extreme SES / Exposure by Indicator")
+
+```
+
+### Maps for 6 cities
+
+```{r}
+
+list_6_cities_en_names <- unique(sf_for_maps_long$name_en)
+
+plots <- purrr::map(
+  list_6_cities_en_names,
+  ~ tm_shape(sf_for_maps_long %>% filter(name_en == .x)) +
+      tm_dots(fill = "color", size = 0.3, fill.legend = tm_legend_hide()) +
+      tm_facets_grid(rows = "indicator") +
+      tm_title(.x)
+)
+
+```
+
+### Plot one map
+
+```{r}
+plots[[5]]   # Affiche la 1ère ville
+
+```
+
+### Save tmaps facets into (fucking useless) PNG
+
+```{r}
+
+purrr::walk2(
+  plots,
+  list_6_cities_en_names,
+  ~ tmap_save(.x, paste0("data_output/tmaps/tmap_", .y, ".png"), width = 4000, height = 4000)
+)
+
+
+```
+
+# Cartographic generalisation test
+
+### Split sf
+
+```{r}
+
+library(purrr)
+
+# Liste des villes
+list_cities <- unique(sf_for_maps_long$name_en)
+
+# Créer une liste de points par ville
+list_pts_by_city <- purrr::map(
+  list_cities,
+  ~ sf_for_maps_long %>% filter(name_en == .x)
+)
+names(list_pts_by_city) <- list_cities
+
+```
+
+### KDE + contours pour chaque ville
+
+```{r}
+library(sf)
+library(spatstat.geom)
+library(spatstat.explore)
+library(stars)
+library(abind)
+
+get_density_polygons <- function(pts_sf, sigma = 200, quantile_cut = 0.8) {
+  coords <- st_coordinates(pts_sf)
+  w <- as.owin(st_bbox(pts_sf))
+  ppp_pts <- as.ppp(coords, W = w)
+  dens <- spatstat.explore::density.ppp(ppp_pts, sigma = sigma)
+  ras <- raster::raster(dens)
+  stars_ras <- st_as_stars(ras)
+  # Correction ici :
+  vals <- as.vector(stars_ras[[1]])
+  iso <- st_contour(stars_ras, breaks = quantile(vals, probs = quantile_cut, na.rm = TRUE))
+  iso$city <- unique(pts_sf$name_en)
+  iso
+}
+
+
+```
+
+### Appel sur toutes les villes
+
+```{r}
+
+list_6_cities_en_names <- unique(sf_for_maps_long$name_en)
+
+list_isopolys <- purrr::map(
+  list_6_cities_en_names,
+  ~ get_density_polygons(
+      sf_for_maps_long %>% filter(name_en == .x),
+      sigma = 200, quantile_cut = 0.8
+    )
+)
+
+```
+
+### Fusionne les polygones
+
+```{r}
+
+library(dplyr)
+isopolys <- bind_rows(list_isopolys)
+
+```
+
+## TEST pour les extrêmes
+
+### Filtrer les points extrêmes par ville et indicateur
+
+```{r}
+
+library(dplyr)
+library(purrr)
+
+# Indique le mapping label <-> indicateur (modifie selon ta convention NDVI/Green)
+keep_labels <- list(
+  noise = c("Low SES / High Noise", "High SES / Low Noise"),
+  no2   = c("Low SES / High NO₂", "High SES / Low NO₂"),
+  ndvi  = c("Low SES / Low Green", "High SES / High Green")
+)
+
+```
+
+### Filtrer et générer les hotspots pour chaque indicateur
+
+```{r}
+# NO2
+list_isopolys_no2 <- purrr::map(
+  list_6_cities_en_names,
+  ~ get_density_polygons(
+      sf_for_maps_long %>% 
+        filter(
+          name_en == .x,
+          indicator == "NO₂",
+          label %in% keep_labels$no2
+        ),
+      sigma = 200, quantile_cut = 0.8
+    )
+)
+isopolys_no2 <- bind_rows(list_isopolys_no2)
+
+# NOISE
+list_isopolys_noise <- purrr::map(
+  list_6_cities_en_names,
+  ~ get_density_polygons(
+      sf_for_maps_long %>% 
+        filter(
+          name_en == .x,
+          indicator == "Noise",
+          label %in% keep_labels$noise
+        ),
+      sigma = 200, quantile_cut = 0.8
+    )
+)
+isopolys_noise <- bind_rows(list_isopolys_noise)
+
+# NDVI
+list_isopolys_ndvi <- purrr::map(
+  list_6_cities_en_names,
+  ~ get_density_polygons(
+      sf_for_maps_long %>% 
+        filter(
+          name_en == .x,
+          indicator == "Green",
+          label %in% keep_labels$ndvi
+        ),
+      sigma = 200, quantile_cut = 0.8
+    )
+)
+isopolys_ndvi <- bind_rows(list_isopolys_ndvi)
+
+
+```
+
+```{r}
+
+isopolys_all <- bind_rows(
+  isopolys_noise %>% mutate(indicator = "Noise"),
+  isopolys_no2   %>% mutate(indicator = "NO₂"),
+  isopolys_ndvi  %>% mutate(indicator = "Green")
+)
+
+```
+
+```{r}
+
+sf_points_extreme <- sf_for_maps_long %>%
+  filter(
+    (indicator == "NO₂"   & label %in% keep_labels$no2) |
+    (indicator == "Noise" & label %in% keep_labels$noise) |
+    (indicator == "Green" & label %in% keep_labels$ndvi)
+  ) %>%
+  mutate(city = name_en)  # harmonise avec isopolys_all
+
+
+tm_shape(isopolys_all) +
+  tm_polygons(fill = "indicator", fill_alpha = 0.5) +
+tm_shape(sf_points_extreme) +
+  tm_dots(fill = "color", size = 0.08, fill.legend = tm_legend_hide()) +
+  tm_facets_grid(rows = "city", columns = "indicator") +
+  tm_title("Hotspots: Extreme SES / Exposure by City and Indicator")
+
+```
+
+```{r}
+sf::st_write(isopolys_all, "data_output/hotspots_extreme_ses_exposure.gpkg", layer = "hotspots", delete_layer = TRUE)
 
 ```
