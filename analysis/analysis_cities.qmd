@@ -1033,6 +1033,8 @@ create_hotspots_by_category <- function(sf_data,
 }
 ```
 
+### Function call for NDVI
+
 ```{r}
 
 # Vérifier le CRS de tes données originales
@@ -1054,6 +1056,8 @@ st_crs(hotspots_clean)
 mapview(hotspots_clean[hotspots_clean$city == "Geneva",], zcol = "category")
 ```
 
+### GPKG Export
+
 ```{r}
 
 # S'assurer qu'on exporte le bon objet
@@ -1065,4 +1069,112 @@ st_write(hotspots_clean,
 cat("Colonnes dans hotspots_clean:", names(hotspots_clean), "\n")
 cat("Indicateurs:", unique(hotspots_clean$indicator), "\n")
 cat("Catégories:", unique(hotspots_clean$category), "\n")
+```
+
+### NO2 and Noise
+
+```{r}
+
+create_hotspots_by_category <- function(sf_data, 
+                                       target_indicator = "Green",
+                                       sigma = 50,
+                                       quantile_cut = 0.85,
+                                       min_points = 8) {
+  
+  # Définir les catégories d'intérêt (avec le bon nom pour NO2)
+  if (target_indicator == "Green") {
+    wealthy_healthy <- "High SES / High Green"
+    poor_unhealthy <- "Low SES / Low Green"
+  } else if (target_indicator == "Noise") {
+    wealthy_healthy <- "High SES / Low Noise"
+    poor_unhealthy <- "Low SES / High Noise"
+  } else if (target_indicator == "NO₂") {  # Avec le caractère spécial
+    wealthy_healthy <- "High SES / Low NO₂"
+    poor_unhealthy <- "Low SES / High NO₂"
+  } else {
+    stop("Indicateur non reconnu. Utiliser 'Green', 'Noise', ou 'NO₂'")
+  }
+  
+  # Le reste de la fonction reste identique...
+  sf_filtered <- sf_data %>%
+    filter(indicator == target_indicator,
+           label %in% c(wealthy_healthy, poor_unhealthy))
+  
+  cities <- unique(sf_filtered$name_en)
+  
+  create_clean_polygons <- function(points_sf, category_name) {
+    if (nrow(points_sf) < min_points) return(NULL)
+    
+    original_crs <- st_crs(points_sf)
+    
+    if (st_is_longlat(points_sf)) {
+      points_projected <- st_transform(points_sf, 2056)
+    } else {
+      points_projected <- points_sf
+    }
+    
+    coords <- st_coordinates(points_projected)
+    bbox <- st_bbox(points_projected)
+    margin <- sigma * 2
+    
+    w <- owin(xrange = c(bbox$xmin - margin, bbox$xmax + margin),
+              yrange = c(bbox$ymin - margin, bbox$ymax + margin))
+    
+    ppp_pts <- ppp(x = coords[,1], y = coords[,2], window = w)
+    dens <- density.ppp(ppp_pts, sigma = sigma, edge = TRUE)
+    
+    ras <- raster::raster(dens)
+    raster::crs(ras) <- sp::CRS("+init=epsg:2056")
+    stars_ras <- st_as_stars(ras)
+    
+    vals <- as.vector(stars_ras[[1]])
+    vals_clean <- vals[!is.na(vals) & vals > 0]
+    
+    if (length(vals_clean) == 0) return(NULL)
+    
+    threshold <- quantile(vals_clean, probs = quantile_cut, na.rm = TRUE)
+    contours <- st_contour(stars_ras, breaks = threshold)
+    
+    if (nrow(contours) == 0) return(NULL)
+    
+    points_buffer <- st_buffer(points_projected, dist = sigma * 1.5)
+    points_union <- st_union(points_buffer)
+    
+    polygons <- contours %>%
+      filter(Max == Inf | Max > threshold) %>%
+      st_cast("POLYGON") %>%
+      st_buffer(0) %>%
+      st_intersection(points_union) %>%
+      st_simplify(dTolerance = 10) %>%
+      mutate(area_m2 = as.numeric(st_area(.))) %>%
+      filter(area_m2 > 1000) %>%
+      select(-any_of(c("layer", "Min", "Max"))) %>%
+      mutate(
+        city = unique(points_sf$name_en)[1],
+        category = category_name,
+        indicator = target_indicator,
+        n_source_points = nrow(points_sf)
+      )
+    
+    if (!is.na(original_crs)) {
+      polygons <- st_transform(polygons, original_crs)
+    }
+    
+    return(polygons)
+  }
+  
+  results <- map_dfr(cities, function(city) {
+    city_data <- sf_filtered %>% filter(name_en == city)
+    
+    wealthy_points <- city_data %>% filter(label == wealthy_healthy)
+    poor_points <- city_data %>% filter(label == poor_unhealthy)
+    
+    wealthy_polygons <- create_clean_polygons(wealthy_points, "wealthy_healthy")
+    poor_polygons <- create_clean_polygons(poor_points, "poor_unhealthy")
+    
+    bind_rows(wealthy_polygons, poor_polygons)
+  })
+  
+  return(results)
+}
 ```
