@@ -7,6 +7,21 @@ editor: visual
 
 ```{r}
 
+library(tidyverse)
+library(tidylog)
+library(terra)
+library(sf)
+library(mapview)
+library(spatstat)
+library(mapsf)
+library(btb)
+library(spData)
+library(spdep)
+library(viridis)
+```
+
+```{r}
+
 sep_cross_noise_no2 <- read_sf("data_input/data_edit/sep_cross_noise_no2.gpkg")
 ```
 
