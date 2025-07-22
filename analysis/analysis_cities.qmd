@@ -14,11 +14,11 @@ sf_municipalities <- read_sf("data_input/data_raw/sf_polg_swisstopo.gpkg")
 df_cities_pop <- read_csv("data_input/data_raw/stats_cities.csv") %>% 
   select(bfs_nummer,nom_officiel, POP_2023)
 
-list_cities_10 <- cities_pop %>% 
+list_cities_10 <- df_cities_pop %>% 
   slice_max(POP_2023, n=10) %>% 
   pull(bfs_nummer)
 
-list_cities_6 <- cities_pop %>% 
+list_cities_6 <- df_cities_pop %>% 
   slice_max(POP_2023, n=6) %>% 
   pull(bfs_nummer)
 
@@ -408,6 +408,14 @@ sf_grouped <- sf_grouped %>%
     )
   )
 
+```
+
+### Export
+
+```{r}
+
+# sf_grouped %>% 
+#   write_sf("data_input/data_edit/cities_reclassified.gpkg")
 ```
 
 ## Making scatterplot template
@@ -908,4 +916,153 @@ tm_shape(sf_points_extreme) +
 ```{r}
 sf::st_write(isopolys_all, "data_output/hotspots_extreme_ses_exposure.gpkg", layer = "hotspots", delete_layer = TRUE)
 
+```
+
+# Heatmaps with Claude
+
+```{r}
+
+create_hotspots_by_category <- function(sf_data, 
+                                       target_indicator = "Green",
+                                       sigma = 50,
+                                       quantile_cut = 0.85,
+                                       min_points = 8) {
+  
+  # Définir les catégories d'intérêt
+  if (target_indicator == "Green") {
+    wealthy_healthy <- "High SES / High Green"
+    poor_unhealthy <- "Low SES / Low Green"
+  } else if (target_indicator == "Noise") {
+    wealthy_healthy <- "High SES / Low Noise"
+    poor_unhealthy <- "Low SES / High Noise"
+  }
+  
+  # Filtrer les données pour l'indicateur
+  sf_filtered <- sf_data %>%
+    filter(indicator == target_indicator,
+           label %in% c(wealthy_healthy, poor_unhealthy))
+  
+  cities <- unique(sf_filtered$name_en)
+  
+  # Fonction pour créer des polygones propres
+  create_clean_polygons <- function(points_sf, category_name) {
+    if (nrow(points_sf) < min_points) return(NULL)
+    
+    # Sauvegarder le CRS original
+    original_crs <- st_crs(points_sf)
+    
+    # Projeter en LV95 pour les calculs
+    if (st_is_longlat(points_sf)) {
+      points_projected <- st_transform(points_sf, 2056)
+    } else {
+      points_projected <- points_sf
+    }
+    
+    coords <- st_coordinates(points_projected)
+    
+    # Créer une fenêtre plus serrée autour des points
+    bbox <- st_bbox(points_projected)
+    margin <- sigma * 2  # Réduire la marge
+    
+    w <- owin(xrange = c(bbox$xmin - margin, bbox$xmax + margin),
+              yrange = c(bbox$ymin - margin, bbox$ymax + margin))
+    
+    ppp_pts <- ppp(x = coords[,1], y = coords[,2], window = w)
+    dens <- density.ppp(ppp_pts, sigma = sigma, edge = TRUE)
+    
+    # Convertir en stars avec CRS
+    ras <- raster::raster(dens)
+    raster::crs(ras) <- sp::CRS("+init=epsg:2056")  # Forcer le CRS
+    stars_ras <- st_as_stars(ras)
+    
+    vals <- as.vector(stars_ras[[1]])
+    vals_clean <- vals[!is.na(vals) & vals > 0]
+    
+    if (length(vals_clean) == 0) return(NULL)
+    
+    threshold <- quantile(vals_clean, probs = quantile_cut, na.rm = TRUE)
+    
+    # Créer contours
+    contours <- st_contour(stars_ras, breaks = threshold)
+    
+    if (nrow(contours) == 0) return(NULL)
+    
+    # SOLUTION : Créer un masque avec les points pour découper
+    points_buffer <- st_buffer(points_projected, dist = sigma * 1.5)
+    points_union <- st_union(points_buffer)
+    
+    # Traitement des polygones
+    polygons <- contours %>%
+      filter(Max == Inf | Max > threshold) %>%
+      st_cast("POLYGON") %>%
+      st_buffer(0) %>%
+      st_intersection(points_union) %>%  # DÉCOUPER avec le masque des points
+      st_simplify(dTolerance = 10) %>%
+      mutate(area_m2 = as.numeric(st_area(.))) %>%
+      filter(area_m2 > 1000) %>%
+      select(-any_of(c("layer", "Min", "Max"))) %>%
+      mutate(
+        city = unique(points_sf$name_en)[1],
+        category = category_name,
+        indicator = target_indicator,
+        n_source_points = nrow(points_sf)
+      )
+    
+    # Retransformer dans le CRS original
+    if (!is.na(original_crs)) {
+      polygons <- st_transform(polygons, original_crs)
+    }
+    
+    return(polygons)
+  }
+  
+  # Traiter chaque ville et chaque catégorie
+  results <- map_dfr(cities, function(city) {
+    city_data <- sf_filtered %>% filter(name_en == city)
+    
+    wealthy_points <- city_data %>% filter(label == wealthy_healthy)
+    poor_points <- city_data %>% filter(label == poor_unhealthy)
+    
+    wealthy_polygons <- create_clean_polygons(wealthy_points, "wealthy_healthy")
+    poor_polygons <- create_clean_polygons(poor_points, "poor_unhealthy")
+    
+    bind_rows(wealthy_polygons, poor_polygons)
+  })
+  
+  return(results)
+}
+```
+
+```{r}
+
+# Vérifier le CRS de tes données originales
+st_crs(sf_for_maps_long)
+
+# Relancer
+hotspots_clean <- create_hotspots_by_category(
+  sf_for_maps_long,
+  target_indicator = "Green",
+  sigma = 50,
+  quantile_cut = 0.9,
+  min_points = 10
+)
+
+# Vérifier le CRS du résultat
+st_crs(hotspots_clean)
+
+# Test mapview
+mapview(hotspots_clean[hotspots_clean$city == "Geneva",], zcol = "category")
+```
+
+```{r}
+
+# S'assurer qu'on exporte le bon objet
+st_write(hotspots_clean, 
+         "data_output/hotspots_GREEN_ONLY_clean.gpkg", 
+         delete_dsn = TRUE)
+
+# Vérification avant export
+cat("Colonnes dans hotspots_clean:", names(hotspots_clean), "\n")
+cat("Indicateurs:", unique(hotspots_clean$indicator), "\n")
+cat("Catégories:", unique(hotspots_clean$category), "\n")
 ```
