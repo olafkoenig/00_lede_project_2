@@ -50,7 +50,9 @@ cities_translation <-tibble::tibble(
 
 ```{r}
 
-sf <- read_sf("data_input/data_edit/sep_cross_noise_no2_ndvi.gpkg") %>% select(ssep3:geom) %>% select(id, bfs_nummer, everything()) %>% 
+sf <- read_sf("data_input/data_edit/sep_cross_noise_no2_ndvi.gpkg") %>% 
+  select(ssep3:geom) %>% 
+  select(id, bfs_nummer, everything()) %>% 
   filter(bfs_nummer %in% list_cities_10) %>% 
   left_join(cities_translation)
 
@@ -60,6 +62,10 @@ sf <- sf %>%
     ndvi_200m = 1 - ndvi_200m,
     ndvi_500m = 1 - ndvi_500m
   )
+
+sf_national <- read_sf("data_input/data_edit/sep_cross_noise_no2_ndvi.gpkg") %>% 
+  select(ssep3:geom) %>%
+  select(id, bfs_nummer, everything()) 
 ```
 
 # Edit data
@@ -107,7 +113,6 @@ prepare_groupings <- function(df) {
 }
 
 list_sf_by_commune_grouped <- map(list_sf_by_commune, prepare_groupings)
-
 ```
 
 ## Compute agregated statistics for each quantiles
@@ -348,6 +353,9 @@ dw_cities_lolipop <- df_stats_long %>%
   pivot_wider(
     names_from = "group",
     values_from = "value"
+  ) %>% 
+  mutate(
+    difference = `1` - `4`
   ) %>% 
   rename(
     "Lowest SES" = `1`,
@@ -743,190 +751,23 @@ purrr::walk2(
 
 ```
 
-# Cartographic generalisation test
-
-### Split sf
+# Heatmaps geometry with Claude
 
 ```{r}
 
-library(purrr)
+min_households_per_hotspot = 5
 
-# Liste des villes
-list_cities <- unique(sf_for_maps_long$name_en)
-
-# Créer une liste de points par ville
-list_pts_by_city <- purrr::map(
-  list_cities,
-  ~ sf_for_maps_long %>% filter(name_en == .x)
-)
-names(list_pts_by_city) <- list_cities
-
-```
-
-### KDE + contours pour chaque ville
-
-```{r}
+# Workflow propre pour créer des hotspots anonymisés
+library(dplyr)
 library(sf)
-library(spatstat.geom)
-library(spatstat.explore)
-library(stars)
-library(abind)
 
-get_density_polygons <- function(pts_sf, sigma = 200, quantile_cut = 0.8) {
-  coords <- st_coordinates(pts_sf)
-  w <- as.owin(st_bbox(pts_sf))
-  ppp_pts <- as.ppp(coords, W = w)
-  dens <- spatstat.explore::density.ppp(ppp_pts, sigma = sigma)
-  ras <- raster::raster(dens)
-  stars_ras <- st_as_stars(ras)
-  # Correction ici :
-  vals <- as.vector(stars_ras[[1]])
-  iso <- st_contour(stars_ras, breaks = quantile(vals, probs = quantile_cut, na.rm = TRUE))
-  iso$city <- unique(pts_sf$name_en)
-  iso
-}
-
-
-```
-
-### Appel sur toutes les villes
-
-```{r}
-
-list_6_cities_en_names <- unique(sf_for_maps_long$name_en)
-
-list_isopolys <- purrr::map(
-  list_6_cities_en_names,
-  ~ get_density_polygons(
-      sf_for_maps_long %>% filter(name_en == .x),
-      sigma = 200, quantile_cut = 0.8
-    )
-)
-
-```
-
-### Fusionne les polygones
-
-```{r}
-
-library(dplyr)
-isopolys <- bind_rows(list_isopolys)
-
-```
-
-## TEST pour les extrêmes
-
-### Filtrer les points extrêmes par ville et indicateur
-
-```{r}
-
-library(dplyr)
-library(purrr)
-
-# Indique le mapping label <-> indicateur (modifie selon ta convention NDVI/Green)
-keep_labels <- list(
-  noise = c("Low SES / High Noise", "High SES / Low Noise"),
-  no2   = c("Low SES / High NO₂", "High SES / Low NO₂"),
-  ndvi  = c("Low SES / Low Green", "High SES / High Green")
-)
-
-```
-
-### Filtrer et générer les hotspots pour chaque indicateur
-
-```{r}
-# NO2
-list_isopolys_no2 <- purrr::map(
-  list_6_cities_en_names,
-  ~ get_density_polygons(
-      sf_for_maps_long %>% 
-        filter(
-          name_en == .x,
-          indicator == "NO₂",
-          label %in% keep_labels$no2
-        ),
-      sigma = 200, quantile_cut = 0.8
-    )
-)
-isopolys_no2 <- bind_rows(list_isopolys_no2)
-
-# NOISE
-list_isopolys_noise <- purrr::map(
-  list_6_cities_en_names,
-  ~ get_density_polygons(
-      sf_for_maps_long %>% 
-        filter(
-          name_en == .x,
-          indicator == "Noise",
-          label %in% keep_labels$noise
-        ),
-      sigma = 200, quantile_cut = 0.8
-    )
-)
-isopolys_noise <- bind_rows(list_isopolys_noise)
-
-# NDVI
-list_isopolys_ndvi <- purrr::map(
-  list_6_cities_en_names,
-  ~ get_density_polygons(
-      sf_for_maps_long %>% 
-        filter(
-          name_en == .x,
-          indicator == "Green",
-          label %in% keep_labels$ndvi
-        ),
-      sigma = 200, quantile_cut = 0.8
-    )
-)
-isopolys_ndvi <- bind_rows(list_isopolys_ndvi)
-
-
-```
-
-```{r}
-
-isopolys_all <- bind_rows(
-  isopolys_noise %>% mutate(indicator = "Noise"),
-  isopolys_no2   %>% mutate(indicator = "NO₂"),
-  isopolys_ndvi  %>% mutate(indicator = "Green")
-)
-
-```
-
-```{r}
-
-sf_points_extreme <- sf_for_maps_long %>%
-  filter(
-    (indicator == "NO₂"   & label %in% keep_labels$no2) |
-    (indicator == "Noise" & label %in% keep_labels$noise) |
-    (indicator == "Green" & label %in% keep_labels$ndvi)
-  ) %>%
-  mutate(city = name_en)  # harmonise avec isopolys_all
-
-
-tm_shape(isopolys_all) +
-  tm_polygons(fill = "indicator", fill_alpha = 0.5) +
-tm_shape(sf_points_extreme) +
-  tm_dots(fill = "color", size = 0.08, fill.legend = tm_legend_hide()) +
-  tm_facets_grid(rows = "city", columns = "indicator") +
-  tm_title("Hotspots: Extreme SES / Exposure by City and Indicator")
-
-```
-
-```{r}
-sf::st_write(isopolys_all, "data_output/hotspots_extreme_ses_exposure.gpkg", layer = "hotspots", delete_layer = TRUE)
-
-```
-
-# Heatmaps with Claude
-
-```{r}
-
-create_hotspots_by_category <- function(sf_data, 
+# 1. CRÉER LES HOTSPOTS AVEC COMPTAGE INTÉGRÉ
+create_hotspots_with_counts <- function(sf_data, 
                                        target_indicator = "Green",
                                        sigma = 50,
                                        quantile_cut = 0.85,
-                                       min_points = 8) {
+                                       min_points = 8,
+                                       min_households_per_hotspot = 5) {
   
   # Définir les catégories d'intérêt
   if (target_indicator == "Green") {
@@ -935,6 +776,9 @@ create_hotspots_by_category <- function(sf_data,
   } else if (target_indicator == "Noise") {
     wealthy_healthy <- "High SES / Low Noise"
     poor_unhealthy <- "Low SES / High Noise"
+  } else if (target_indicator == "NO₂") {
+    wealthy_healthy <- "High SES / Low NO₂"
+    poor_unhealthy <- "Low SES / High NO₂"
   }
   
   # Filtrer les données pour l'indicateur
@@ -944,169 +788,13 @@ create_hotspots_by_category <- function(sf_data,
   
   cities <- unique(sf_filtered$name_en)
   
-  # Fonction pour créer des polygones propres
-  create_clean_polygons <- function(points_sf, category_name) {
+  # Fonction pour créer des polygones avec comptage
+  create_counted_polygons <- function(points_sf, category_name) {
     if (nrow(points_sf) < min_points) return(NULL)
     
-    # Sauvegarder le CRS original
     original_crs <- st_crs(points_sf)
     
     # Projeter en LV95 pour les calculs
-    if (st_is_longlat(points_sf)) {
-      points_projected <- st_transform(points_sf, 2056)
-    } else {
-      points_projected <- points_sf
-    }
-    
-    coords <- st_coordinates(points_projected)
-    
-    # Créer une fenêtre plus serrée autour des points
-    bbox <- st_bbox(points_projected)
-    margin <- sigma * 2  # Réduire la marge
-    
-    w <- owin(xrange = c(bbox$xmin - margin, bbox$xmax + margin),
-              yrange = c(bbox$ymin - margin, bbox$ymax + margin))
-    
-    ppp_pts <- ppp(x = coords[,1], y = coords[,2], window = w)
-    dens <- density.ppp(ppp_pts, sigma = sigma, edge = TRUE)
-    
-    # Convertir en stars avec CRS
-    ras <- raster::raster(dens)
-    raster::crs(ras) <- sp::CRS("+init=epsg:2056")  # Forcer le CRS
-    stars_ras <- st_as_stars(ras)
-    
-    vals <- as.vector(stars_ras[[1]])
-    vals_clean <- vals[!is.na(vals) & vals > 0]
-    
-    if (length(vals_clean) == 0) return(NULL)
-    
-    threshold <- quantile(vals_clean, probs = quantile_cut, na.rm = TRUE)
-    
-    # Créer contours
-    contours <- st_contour(stars_ras, breaks = threshold)
-    
-    if (nrow(contours) == 0) return(NULL)
-    
-    # SOLUTION : Créer un masque avec les points pour découper
-    points_buffer <- st_buffer(points_projected, dist = sigma * 1.5)
-    points_union <- st_union(points_buffer)
-    
-    # Traitement des polygones
-    polygons <- contours %>%
-      filter(Max == Inf | Max > threshold) %>%
-      st_cast("POLYGON") %>%
-      st_buffer(0) %>%
-      st_intersection(points_union) %>%  # DÉCOUPER avec le masque des points
-      st_simplify(dTolerance = 10) %>%
-      mutate(area_m2 = as.numeric(st_area(.))) %>%
-      filter(area_m2 > 1000) %>%
-      select(-any_of(c("layer", "Min", "Max"))) %>%
-      mutate(
-        city = unique(points_sf$name_en)[1],
-        category = category_name,
-        indicator = target_indicator,
-        n_source_points = nrow(points_sf)
-      )
-    
-    # Retransformer dans le CRS original
-    if (!is.na(original_crs)) {
-      polygons <- st_transform(polygons, original_crs)
-    }
-    
-    return(polygons)
-  }
-  
-  # Traiter chaque ville et chaque catégorie
-  results <- map_dfr(cities, function(city) {
-    city_data <- sf_filtered %>% filter(name_en == city)
-    
-    wealthy_points <- city_data %>% filter(label == wealthy_healthy)
-    poor_points <- city_data %>% filter(label == poor_unhealthy)
-    
-    wealthy_polygons <- create_clean_polygons(wealthy_points, "wealthy_healthy")
-    poor_polygons <- create_clean_polygons(poor_points, "poor_unhealthy")
-    
-    bind_rows(wealthy_polygons, poor_polygons)
-  })
-  
-  return(results)
-}
-```
-
-### Function call for NDVI
-
-```{r}
-
-# Vérifier le CRS de tes données originales
-st_crs(sf_for_maps_long)
-
-# Relancer
-hotspots_clean <- create_hotspots_by_category(
-  sf_for_maps_long,
-  target_indicator = "Green",
-  sigma = 50,
-  quantile_cut = 0.9,
-  min_points = 10
-)
-
-# Vérifier le CRS du résultat
-st_crs(hotspots_clean)
-
-# Test mapview
-mapview(hotspots_clean[hotspots_clean$city == "Geneva",], zcol = "category")
-```
-
-### GPKG Export
-
-```{r}
-
-# S'assurer qu'on exporte le bon objet
-st_write(hotspots_clean, 
-         "data_output/hotspots_GREEN_ONLY_clean.gpkg", 
-         delete_dsn = TRUE)
-
-# Vérification avant export
-cat("Colonnes dans hotspots_clean:", names(hotspots_clean), "\n")
-cat("Indicateurs:", unique(hotspots_clean$indicator), "\n")
-cat("Catégories:", unique(hotspots_clean$category), "\n")
-```
-
-### NO2 and Noise
-
-```{r}
-
-create_hotspots_by_category <- function(sf_data, 
-                                       target_indicator = "Green",
-                                       sigma = 50,
-                                       quantile_cut = 0.85,
-                                       min_points = 8) {
-  
-  # Définir les catégories d'intérêt (avec le bon nom pour NO2)
-  if (target_indicator == "Green") {
-    wealthy_healthy <- "High SES / High Green"
-    poor_unhealthy <- "Low SES / Low Green"
-  } else if (target_indicator == "Noise") {
-    wealthy_healthy <- "High SES / Low Noise"
-    poor_unhealthy <- "Low SES / High Noise"
-  } else if (target_indicator == "NO₂") {  # Avec le caractère spécial
-    wealthy_healthy <- "High SES / Low NO₂"
-    poor_unhealthy <- "Low SES / High NO₂"
-  } else {
-    stop("Indicateur non reconnu. Utiliser 'Green', 'Noise', ou 'NO₂'")
-  }
-  
-  # Le reste de la fonction reste identique...
-  sf_filtered <- sf_data %>%
-    filter(indicator == target_indicator,
-           label %in% c(wealthy_healthy, poor_unhealthy))
-  
-  cities <- unique(sf_filtered$name_en)
-  
-  create_clean_polygons <- function(points_sf, category_name) {
-    if (nrow(points_sf) < min_points) return(NULL)
-    
-    original_crs <- st_crs(points_sf)
-    
     if (st_is_longlat(points_sf)) {
       points_projected <- st_transform(points_sf, 2056)
     } else {
@@ -1137,25 +825,38 @@ create_hotspots_by_category <- function(sf_data,
     
     if (nrow(contours) == 0) return(NULL)
     
+    # Créer un masque avec les points
     points_buffer <- st_buffer(points_projected, dist = sigma * 1.5)
     points_union <- st_union(points_buffer)
     
+    # Traitement des polygones individuels (PAS de dissolve)
     polygons <- contours %>%
       filter(Max == Inf | Max > threshold) %>%
       st_cast("POLYGON") %>%
       st_buffer(0) %>%
       st_intersection(points_union) %>%
       st_simplify(dTolerance = 10) %>%
-      mutate(area_m2 = as.numeric(st_area(.))) %>%
-      filter(area_m2 > 1000) %>%
+      mutate(
+        area_m2 = as.numeric(st_area(.)),
+        # COMPTAGE DES MÉNAGES PAR POLYGONE
+        n_households = lengths(st_intersects(., points_projected))
+      ) %>%
+      # FILTRAGE PAR SEUIL D'ANONYMISATION
+      filter(
+        area_m2 > 1000,
+        n_households >= min_households_per_hotspot
+      ) %>%
       select(-any_of(c("layer", "Min", "Max"))) %>%
       mutate(
         city = unique(points_sf$name_en)[1],
         category = category_name,
         indicator = target_indicator,
-        n_source_points = nrow(points_sf)
+        n_source_points = nrow(points_sf),
+        hotspot_id = paste0(target_indicator, "_", category_name, "_", 
+                           unique(points_sf$name_en)[1], "_", row_number())
       )
     
+    # Retransformer dans le CRS original
     if (!is.na(original_crs)) {
       polygons <- st_transform(polygons, original_crs)
     }
@@ -1163,18 +864,199 @@ create_hotspots_by_category <- function(sf_data,
     return(polygons)
   }
   
+  # Traiter chaque ville et chaque catégorie
   results <- map_dfr(cities, function(city) {
     city_data <- sf_filtered %>% filter(name_en == city)
     
     wealthy_points <- city_data %>% filter(label == wealthy_healthy)
     poor_points <- city_data %>% filter(label == poor_unhealthy)
     
-    wealthy_polygons <- create_clean_polygons(wealthy_points, "wealthy_healthy")
-    poor_polygons <- create_clean_polygons(poor_points, "poor_unhealthy")
+    wealthy_polygons <- create_counted_polygons(wealthy_points, "wealthy_healthy")
+    poor_polygons <- create_counted_polygons(poor_points, "poor_unhealthy")
     
     bind_rows(wealthy_polygons, poor_polygons)
   })
   
+  cat("=== RÉSULTATS", target_indicator, "===\n")
+  cat("Polygones créés:", nrow(results), "\n")
+  if(nrow(results) > 0) {
+    cat("Ménages par hotspot - min:", min(results$n_households), 
+        "max:", max(results$n_households), "\n")
+    cat("Distribution par ville et catégorie:\n")
+    print(table(results$city, results$category))
+  }
+  cat("\n")
+  
   return(results)
 }
+
+# 2. CRÉER LES 3 INDICATEURS AVEC ANONYMISATION
+hotspots_green_clean <- create_hotspots_with_counts(
+  sf_for_maps_long,
+  target_indicator = "Green",
+  sigma = 50,
+  quantile_cut = 0.9,
+  min_points = 10,
+  min_households_per_hotspot = min_households_per_hotspot
+)
+
+hotspots_noise_clean <- create_hotspots_with_counts(
+  sf_for_maps_long,
+  target_indicator = "Noise",
+  sigma = 50,
+  quantile_cut = 0.9,
+  min_points = 10,
+  min_households_per_hotspot = min_households_per_hotspot
+)
+
+hotspots_no2_clean <- create_hotspots_with_counts(
+  sf_for_maps_long,
+  target_indicator = "NO₂",
+  sigma = 50,
+  quantile_cut = 0.9,
+  min_points = 10,
+  min_households_per_hotspot = min_households_per_hotspot
+)
+
+# 3. EXPORT DIRECT EN GEOJSON POUR MAPBOX
+output_dir <- "data_output/mapbox"
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
+
+# Transformer en WGS84 et exporter directement
+export_for_mapbox <- function(hotspots_sf, filename) {
+  if(nrow(hotspots_sf) > 0) {
+    hotspots_wgs84 <- st_transform(hotspots_sf, 4326)
+    st_write(hotspots_wgs84, 
+             file.path(output_dir, filename), 
+             delete_dsn = TRUE)
+    cat("✅", filename, ":", nrow(hotspots_wgs84), "polygones exportés\n")
+  } else {
+    cat("❌", filename, ": aucun polygone à exporter\n")
+  }
+}
+
+export_for_mapbox(hotspots_green_clean, "hotspots_green_anonymised.geojson")
+export_for_mapbox(hotspots_noise_clean, "hotspots_noise_anonymised.geojson")
+export_for_mapbox(hotspots_no2_clean, "hotspots_no2_anonymised.geojson")
+
+# 4. RÉSUMÉ FINAL
+total_polygons <- nrow(hotspots_green_clean) + nrow(hotspots_noise_clean) + nrow(hotspots_no2_clean)
+cat("\n🎯 RÉSUMÉ FINAL\n")
+cat("Total hotspots anonymisés:", total_polygons, "\n")
+cat("Seuil d'anonymisation: minimum 10 ménages par hotspot\n")
+cat("Fichiers prêts pour Mapbox dans:", output_dir, "\n")
+```
+
+### 
+
+# Inequalities (SSEP "pure")
+
+## National
+
+```{r}
+
+ses_national_inequality <- sf_grouped %>%
+  st_drop_geometry() %>%
+  summarise(
+      # Déciles 10 et 90
+
+    d10 = quantile(ssep3, 0.1),
+    d25 = quantile(ssep3, 0.25),
+    d50 = quantile(ssep3, 0.5),
+    d75 = quantile(ssep3, 0.75),
+    d90 = quantile(ssep3, 0.9),
+    .groups = "drop"
+  ) %>% mutate(
+    name_en = '<span style="font-weight: bold;">Switzerland</span>'
+  ) %>% select(
+    name_en, everything()
+  )
+```
+
+## Cities
+
+```{r}
+
+# Indicateurs d'inégalité SES par ville
+ses_inequality <- sf_grouped %>%
+  st_drop_geometry() %>%
+  group_by(name_en) %>%
+  summarise(
+      # Déciles 10 et 90
+
+    d10 = quantile(ssep3, 0.1),
+    d25 = quantile(ssep3, 0.25),
+    d50 = quantile(ssep3, 0.5),
+    d75 = quantile(ssep3, 0.75),
+    d90 = quantile(ssep3, 0.9),
+    
+    
+    # Écart interdécile
+    p90_p10_ratio = quantile(ssep3, 0.9) / quantile(ssep3, 0.1),
+    p90_p10_diff = quantile(ssep3, 0.9) - quantile(ssep3, 0.1),
+    
+    # Coefficient de variation
+    cv_ssep = sd(ssep3) / mean(ssep3),
+    
+    # Gini (avec package ineq)
+    gini_ssep = ineq::Gini(ssep3),
+    
+    # Range
+    ssep_range = max(ssep3) - min(ssep3),
+    
+    .groups = "drop"
+  ) %>%
+  arrange(desc(p90_p10_diff))
+
+# Visualisation
+ses_inequality %>%
+  ggplot(aes(x = reorder(name_en, p90_p10_diff), y = p90_p10_diff)) +
+  geom_col(fill = "steelblue", alpha = 0.7) +
+  coord_flip() +
+  labs(
+    title = "Ampleur des inégalités socio-économiques par ville",
+    subtitle = "Différence entre 90e et 10e percentile du SES",
+    x = "Ville", y = "Écart SES (90e - 10e percentile)"
+  )
+```
+
+```{r}
+
+# Classement des villes par inégalité SES
+ses_inequality %>%
+  select(name_en, gini_ssep, p90_p10_diff) %>%
+  arrange(desc(gini_ssep)) %>%
+  mutate(
+    gini_pct = round(gini_ssep * 100, 1),
+    rang = row_number()
+  )
+```
+
+```{r}
+# Gini avec interprétation
+ses_inequality %>%
+  ggplot(aes(x = reorder(name_en, gini_ssep), y = gini_ssep)) +
+  geom_col(aes(fill = gini_ssep), alpha = 0.8) +
+  scale_fill_gradient(low = "lightblue", high = "darkred") +
+  coord_flip() +
+  labs(
+    title = "Intensité des inégalités socio-économiques",
+    subtitle = "Indice de Gini du statut socio-économique par ville",
+    x = "Ville", 
+    y = "Indice de Gini (0 = égalité parfaite, 1 = inégalité maximale)"
+  )
+```
+
+### DW SSEP3 - chart
+
+<https://app.datawrapper.de/edit/3xp9e/upload>
+
+```{r}
+library(DatawRappr)
+ses_inequality %>% 
+  select(name_en:d90) %>% 
+  rbind(ses_national_inequality) %>%
+  dw_data_to_chart("3xp9e")
 ```
