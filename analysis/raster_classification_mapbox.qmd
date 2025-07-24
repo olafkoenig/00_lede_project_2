@@ -1,0 +1,394 @@
+---
+title: "raster_classification_mapbox"
+author: "olaf könig"
+format: html
+editor: visual
+---
+
+# Data
+
+## Raster
+
+```{r}
+
+rast_noise <- rast("data_input/data_raw/LrStrasseTag_4_0_Meter.tif")
+
+rast_no2 <- rast("data_input/data_raw/no2_ymw_2021.asc") %>%
+  {crs(.) <- "EPSG:21781"; .}# Assigner CRS LV03
+
+ndvi <- rast("/Users/bajj@mediait.ch/Documents/Tamedia/2025/2025-05_Vegetation_Index/data_output/tile_fusion/composite_terra_ordered.tif") %>% 
+  project("EPSG:2056")
+```
+
+## Vector
+
+```{r}
+
+sf_municipalities <- read_sf("data_input/data_raw/sf_polg_swisstopo.gpkg")
+
+df_cities_pop <- read_csv("data_input/data_raw/stats_cities.csv") %>% 
+  select(bfs_nummer,nom_officiel, POP_2023)
+
+list_cities_10 <- df_cities_pop %>% 
+  slice_max(POP_2023, n=10) %>% 
+  pull(bfs_nummer)
+
+list_cities_6 <- df_cities_pop %>% 
+  slice_max(POP_2023, n=6) %>% 
+  pull(bfs_nummer)
+
+sf_cities_10 <- sf_municipalities %>% 
+  filter(bfs_nummer %in% list_cities_10)
+
+sf_cities_6 <- sf_municipalities %>% 
+  filter(bfs_nummer %in% list_cities_6)
+
+sf_lakes <- read_sf("data_input/data_raw/swisstopo_tlm_lakes.gpkg") %>% 
+  filter(surface_km2 >= 1)
+```
+
+# RASTER
+
+```{r}
+
+# 3. FONCTION POUR TRAITER UN INDICATEUR (FICHIER PAR VILLE)
+traiter_indicateur_par_ville <- function(raster, sf_villes, seuils, labels, nom_raster, sf_lakes) {
+  cat("Traitement de", nom_raster, "\n")
+  cat("  CRS du raster:", crs(raster, describe = TRUE)$name, "\n")
+  
+  # Traiter chaque ville séparément
+  for (i in 1:nrow(sf_villes)) {
+    sf_ville <- sf_villes[i, ]
+    
+    # Vectoriser la ville
+    sf_ville_vector <- vectoriser_raster_ville(
+      raster = raster,
+      sf_ville = sf_ville,
+      seuils = seuils,
+      labels = labels,
+      nom_raster = nom_raster,
+      sf_lakes = sf_lakes
+    )
+    
+    # Sauvegarder si des données
+    if (!is.null(sf_ville_vector) && nrow(sf_ville_vector) > 0) {
+      ville_nom <- if("nom_officiel" %in% names(sf_ville)) sf_ville$nom_officiel else as.character(sf_ville$bfs_nummer)
+      filename <- paste0("data_output/mapbox_layers/", nom_raster, "_", sf_ville$bfs_nummer, "_", 
+                        gsub("[^A-Za-z0-9]", "", ville_nom), ".geojson")
+      
+      st_write(sf_ville_vector, filename, delete_dsn = TRUE, quiet = TRUE)
+      
+      # Taille du fichier
+      size_kb <- round(file.size(filename) / 1024, 1)
+      cat("    Sauvé:", basename(filename), "(", size_kb, "KB)\n")
+    }
+  }
+}
+
+library(terra)
+library(sf)
+library(dplyr)
+library(purrr)
+
+# 1. DÉFINIR LES SEUILS POUR CHAQUE INDICATEUR
+# Noise: tranches de 10 de 0 à 70
+seuils_noise <- seq(0, 70, 10)
+seuils_noise <- c(seuils_noise, Inf)
+labels_noise <- c("0-10", "10-20", "20-30", "30-40", "40-50", "50-60", "60-70", "70+")
+
+# NO2: tranches de 5 de 0 à 40
+seuils_no2 <- seq(0, 40, 5)
+seuils_no2 <- c(seuils_no2, Inf)
+labels_no2 <- c("0-5", "5-10", "10-15", "15-20", "20-25", "25-30", "30-35", "35-40", "40+")
+
+# NDVI: classe spéciale pour <0.2, puis tranches de 0.1 de 0.2 à 1.0
+seuils_ndvi <- c(-Inf, 0.2, seq(0.3, 1.0, 0.1), Inf)
+labels_ndvi <- c("<0.2", "0.2-0.3", "0.3-0.4", "0.4-0.5", "0.5-0.6", 
+                 "0.6-0.7", "0.7-0.8", "0.8-0.9", "0.9-1.0", "1.0+")
+
+# 2. FONCTION SIMPLIFIÉE POUR VECTORISER UN RASTER PAR VILLE
+vectoriser_raster_ville <- function(raster, sf_ville, seuils, labels, nom_raster, sf_lakes) {
+  ville_nom <- if("nom_officiel" %in% names(sf_ville)) sf_ville$nom_officiel else as.character(sf_ville$bfs_nummer)
+  cat("  Traitement ville:", ville_nom, "\n")
+  
+  # Projeter la ville sur le CRS du raster
+  sf_ville_proj <- st_transform(sf_ville, crs(raster))
+  
+  # Buffer de 200m
+  sf_ville_buffer <- st_buffer(sf_ville_proj, 200)
+  
+  # Convertir en SpatVector pour terra
+  ville_vect <- vect(sf_ville_buffer)
+  
+  # Clipper et masquer le raster
+  raster_clip <- crop(raster, ville_vect)
+  raster_mask <- mask(raster_clip, ville_vect)
+  
+  # Matrice de classification
+  rcl_matrix <- matrix(c(seuils[-length(seuils)], seuils[-1], 1:length(labels)), ncol = 3)
+  
+  # Classifier
+  raster_class <- classify(raster_mask, rcl_matrix, include.lowest = TRUE)
+  
+  # Vectoriser
+  vect_polygons <- as.polygons(raster_class, dissolve = TRUE)
+  sf_polygons <- st_as_sf(vect_polygons)
+  
+  # Vérifier qu'il y a des données
+  if (nrow(sf_polygons) == 0) {
+    cat("    Aucune donnée trouvée\n")
+    return(NULL)
+  }
+  
+  # Identifier la colonne de valeurs
+  col_valeurs <- names(sf_polygons)[1]
+  
+  # Créer les attributs finaux
+  sf_final <- sf_polygons %>%
+    mutate(
+      raster_source = nom_raster,
+      ville = ville_nom,
+      bfs_nummer = sf_ville$bfs_nummer,
+      classe_ord = .data[[col_valeurs]], # Valeur ordinale 1 à n
+      classe_range = case_when(
+        classe_ord >= 1 & classe_ord <= length(labels) ~ labels[classe_ord],
+        TRUE ~ "Non classé"
+      ),
+      .before = 1
+    ) %>%
+    select(-all_of(col_valeurs)) %>%
+    filter(classe_ord >= 1 & classe_ord <= length(labels)) # Garder seulement les classes valides
+  
+  # Enlever les lacs (plus rapide à la fin)
+  if (!is.null(sf_lakes) && nrow(sf_final) > 0) {
+    sf_lakes_proj <- st_transform(sf_lakes, st_crs(sf_final))
+    sf_final <- st_difference(sf_final, st_union(sf_lakes_proj))
+  }
+  
+  # Transformer en WGS84
+  sf_wgs84 <- st_transform(sf_final, "EPSG:4326")
+  
+  cat("    ", nrow(sf_wgs84), "polygones créés\n")
+  return(sf_wgs84)
+}
+
+# 3. CHARGER LES DONNÉES DE BASE
+sf_municipalities <- read_sf("data_input/data_raw/sf_polg_swisstopo.gpkg")
+df_cities_pop <- read_csv("data_input/data_raw/stats_cities.csv") %>% 
+  select(bfs_nummer, nom_officiel, POP_2023)
+
+list_cities_10 <- df_cities_pop %>% 
+  slice_max(POP_2023, n = 10) %>% 
+  pull(bfs_nummer)
+
+sf_cities_10 <- sf_municipalities %>% 
+  filter(bfs_nummer %in% list_cities_10) %>%
+  left_join(df_cities_pop, by = "bfs_nummer")
+
+# 4. CHARGER LES RASTERS ET LACS
+rast_noise <- rast("data_input/data_raw/LrStrasseTag_4_0_Meter.tif")
+rast_no2 <- rast("data_input/data_raw/no2_ymw_2021.asc") %>%
+  {crs(.) <- "EPSG:21781"; .}
+rast_ndvi <- rast("/Users/bajj@mediait.ch/Documents/Tamedia/2025/2025-05_Vegetation_Index/data_output/tile_fusion/composite_terra_ordered.tif")
+
+# Charger les lacs
+sf_lakes <- read_sf("data_input/data_raw/swisstopo_tlm_lakes.gpkg") %>% 
+  filter(surface_km2 >= 1)
+
+# 5. TRAITEMENT POUR CHAQUE INDICATEUR (PAR VILLE)
+# Créer le dossier de sortie
+dir.create("data_output/mapbox_layers", showWarnings = FALSE, recursive = TRUE)
+
+# Traiter chaque indicateur
+traiter_indicateur_par_ville(rast_noise, sf_cities_10, seuils_noise, labels_noise, "noise", sf_lakes)
+traiter_indicateur_par_ville(rast_no2, sf_cities_10, seuils_no2, labels_no2, "no2", sf_lakes)
+traiter_indicateur_par_ville(rast_ndvi, sf_cities_10, seuils_ndvi, labels_ndvi, "ndvi", sf_lakes)
+
+# 6. RÉSUMÉ DES FICHIERS GÉNÉRÉS
+cat("\n=== RÉSUMÉ DES FICHIERS GÉNÉRÉS ===\n")
+files <- list.files("data_output/mapbox_layers", pattern = "*.geojson", full.names = TRUE)
+if (length(files) > 0) {
+  total_size <- 0
+  for (file in files) {
+    size_kb <- round(file.size(file) / 1024, 1)
+    total_size <- total_size + size_kb
+    cat(basename(file), ":", size_kb, "KB\n")
+  }
+  cat("Total:", round(total_size / 1024, 1), "MB\n")
+} else {
+  cat("Aucun fichier généré\n")
+}
+```
+
+## NDVI files too heavy...
+
+```{r}
+
+library(terra)
+library(sf)
+library(dplyr)
+library(purrr)
+
+# 1. DÉFINIR LES CLASSES NDVI AVEC SEUILS 0.2, 0.5, 0.7
+seuils_ndvi <- c(-Inf, 0.2, 0.5, 0.7, Inf)
+labels_ndvi <- c("Très faible (<0.2)", "Faible (0.2-0.5)", "Moyen (0.5-0.7)", "Élevé (≥0.7)")
+
+# 2. FONCTION POUR TRAITER NDVI AVEC AGRÉGATION
+traiter_ndvi_ville_agregee <- function(raster_ndvi, sf_ville, sf_lakes) {
+  ville_nom <- if("nom_officiel" %in% names(sf_ville)) sf_ville$nom_officiel else as.character(sf_ville$bfs_nummer)
+  cat("Traitement NDVI agrégé pour:", ville_nom, "\n")
+  
+  # Projeter la ville sur le CRS du raster
+  sf_ville_proj <- st_transform(sf_ville, crs(raster_ndvi))
+  
+  # Buffer de 200m
+  sf_ville_buffer <- st_buffer(sf_ville_proj, 200)
+  
+  # Convertir en SpatVector pour terra
+  ville_vect <- vect(sf_ville_buffer)
+  
+  # Clipper et masquer le raster
+  raster_clip <- crop(raster_ndvi, ville_vect)
+  raster_mask <- mask(raster_clip, ville_vect)
+  
+  cat("  Résolution originale:", res(raster_mask)[1], "m\n")
+  
+  # Agréger à 30m (facteur 3 depuis 10m)
+  facteur_agregation <- 3
+  cat("  Facteur d'agrégation:", facteur_agregation, "\n")
+  
+  raster_agregat <- aggregate(raster_mask, fact = facteur_agregation, fun = "mean", na.rm = TRUE)
+  cat("  Nouvelle résolution:", res(raster_agregat)[1], "m\n")
+  
+  # Classifier selon les seuils
+  rcl_matrix <- matrix(c(seuils_ndvi[-length(seuils_ndvi)], seuils_ndvi[-1], 1:length(labels_ndvi)), ncol = 3)
+  raster_class <- classify(raster_agregat, rcl_matrix, include.lowest = TRUE)
+  
+  # Vectoriser
+  vect_polygons <- as.polygons(raster_class, dissolve = TRUE)
+  sf_polygons <- st_as_sf(vect_polygons)
+  
+  # Vérifier qu'il y a des données
+  if (nrow(sf_polygons) == 0) {
+    cat("  Aucune donnée trouvée\n")
+    return(NULL)
+  }
+  
+  # Identifier la colonne de valeurs
+  col_valeurs <- names(sf_polygons)[1]
+  
+  # Créer les attributs finaux
+  sf_final <- sf_polygons %>%
+    mutate(
+      raster_source = "ndvi",
+      ville = ville_nom,
+      bfs_nummer = sf_ville$bfs_nummer,
+      classe_ord = .data[[col_valeurs]], # Valeur ordinale 1 à n
+      classe_range = case_when(
+        classe_ord >= 1 & classe_ord <= length(labels_ndvi) ~ labels_ndvi[classe_ord],
+        TRUE ~ "Non classé"
+      ),
+      .before = 1
+    ) %>%
+    select(-all_of(col_valeurs)) %>%
+    filter(classe_ord >= 1 & classe_ord <= length(labels_ndvi)) # Garder seulement les classes valides
+  
+  # Enlever les lacs (après vectorisation)
+  if (!is.null(sf_lakes) && nrow(sf_final) > 0) {
+    cat("  Suppression des lacs...\n")
+    sf_lakes_proj <- st_transform(sf_lakes, st_crs(sf_final))
+    if (nrow(sf_lakes_proj) > 0) {
+      sf_final <- st_difference(sf_final, st_union(sf_lakes_proj))
+    }
+  }
+  
+  # Transformer en WGS84
+  sf_wgs84 <- st_transform(sf_final, "EPSG:4326")
+  
+  cat("  ", nrow(sf_wgs84), "polygones créés\n")
+  return(sf_wgs84)
+}
+
+# 3. CHARGER LES DONNÉES
+cat("=== CHARGEMENT DES DONNÉES ===\n")
+
+# Raster NDVI original
+rast_ndvi <- rast("/Users/bajj@mediait.ch/Documents/Tamedia/2025/2025-05_Vegetation_Index/data_output/tile_fusion/composite_terra_ordered.tif")
+cat("Raster NDVI chargé, CRS:", crs(rast_ndvi, describe = TRUE)$name, "\n")
+
+# Villes
+sf_municipalities <- read_sf("data_input/data_raw/sf_polg_swisstopo.gpkg")
+df_cities_pop <- read_csv("data_input/data_raw/stats_cities.csv") %>% 
+  select(bfs_nummer, nom_officiel, POP_2023)
+
+list_cities_10 <- df_cities_pop %>% 
+  slice_max(POP_2023, n = 10) %>% 
+  pull(bfs_nummer)
+
+sf_cities_10 <- sf_municipalities %>% 
+  filter(bfs_nummer %in% list_cities_10) %>%
+  left_join(df_cities_pop, by = "bfs_nummer")
+
+# Lacs
+sf_lakes <- read_sf("data_input/data_raw/swisstopo_tlm_lakes.gpkg") %>% 
+  filter(surface_km2 >= 1)
+cat("Lacs chargés:", nrow(sf_lakes), "polygones\n")
+
+# 4. TRAITEMENT NDVI POUR CHAQUE VILLE
+cat("\n=== TRAITEMENT NDVI AGRÉGÉ ===\n")
+
+# Créer le dossier de sortie
+dir.create("data_output/mapbox_layers", showWarnings = FALSE, recursive = TRUE)
+
+# Traiter chaque ville
+resultats <- list()
+
+for (i in 1:nrow(sf_cities_10)) {
+  sf_ville <- sf_cities_10[i, ]
+  
+  # Traiter la ville
+  sf_ville_ndvi <- traiter_ndvi_ville_agregee(rast_ndvi, sf_ville, sf_lakes)
+  
+  # Sauvegarder si des données
+  if (!is.null(sf_ville_ndvi) && nrow(sf_ville_ndvi) > 0) {
+    ville_nom_clean <- gsub("[^A-Za-z0-9]", "", sf_ville$nom_officiel)
+    filename <- paste0("data_output/mapbox_layers/ndvi_", sf_ville$bfs_nummer, "_", ville_nom_clean, "_agregat.geojson")
+    
+    st_write(sf_ville_ndvi, filename, delete_dsn = TRUE, quiet = TRUE)
+    
+    # Taille du fichier
+    size_kb <- round(file.size(filename) / 1024, 1)
+    size_mb <- round(size_kb / 1024, 1)
+    cat("  Sauvé:", basename(filename), "(", size_mb, "MB)\n")
+    
+    resultats[[i]] <- list(
+      ville = sf_ville$nom_officiel,
+      file = filename,
+      size_mb = size_mb
+    )
+  }
+  cat("\n")
+}
+
+# 5. RÉSUMÉ FINAL
+cat("=== RÉSUMÉ FINAL NDVI AGRÉGÉ ===\n")
+
+resultats_valides <- compact(resultats)
+total_size <- 0
+conformes <- 0
+
+for (res in resultats_valides) {
+  status <- if (res$size_mb > 5) "⚠️  TROP LOURD" else "✅ OK"
+  if (res$size_mb <= 5) conformes <- conformes + 1
+  total_size <- total_size + res$size_mb
+  
+  cat(res$ville, ":", res$size_mb, "MB", status, "\n")
+}
+
+cat("\nTaille totale NDVI agrégé:", round(total_size, 1), "MB\n")
+cat("Fichiers conformes (<5MB):", conformes, "/", length(resultats_valides), "\n")
+
+if (conformes == length(resultats_valides)) {
+  cat("🎉 Tous les fichiers NDVI sont maintenant conformes !\n")
+}
+```
