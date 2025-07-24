@@ -1,0 +1,201 @@
+---
+title: "sf_mapbox_anonymization"
+author: "olaf könig"
+format: html
+editor: visual
+---
+
+# Summary
+
+1.  Create hexabins for ssep households for anonymization.
+
+2.  Create cities boundaries without lakes
+
+3.  Find centroides coordinates
+
+# Load data
+
+## SSEP
+
+```{r}
+
+sf <- read_sf("data_input/data_edit/cities_reclassified.gpkg") %>% 
+  select(
+    id ,bfs_nummer, ssep3d_local_4
+  )
+
+
+```
+
+## Municipalities and lakes
+
+```{r}
+sf_municipalities <- read_sf("data_input/data_raw/sf_polg_swisstopo.gpkg")
+
+df_cities_pop <- read_csv("data_input/data_raw/stats_cities.csv") %>% 
+  select(bfs_nummer,nom_officiel, POP_2023)
+
+list_cities_10 <- df_cities_pop %>% 
+  slice_max(POP_2023, n=10) %>% 
+  pull(bfs_nummer)
+
+list_cities_6 <- df_cities_pop %>% 
+  slice_max(POP_2023, n=6) %>% 
+  pull(bfs_nummer)
+
+sf_cities_10 <- sf_municipalities %>% 
+  filter(bfs_nummer %in% list_cities_10)
+
+sf_cities_6 <- sf_municipalities %>% 
+  filter(bfs_nummer %in% list_cities_6)
+
+sf_lakes <- read_sf("data_input/data_raw/swisstopo_tlm_lakes.gpkg") %>% 
+  filter(surface_km2 >= 1)
+```
+
+## Create hexagons
+
+```{r}
+library(sf)
+library(dplyr)
+library(purrr)
+
+# Fonction pour une ville
+create_hex_city <- function(sf_city, hex_size = 100, min_points = 5) {
+  
+  city_code <- unique(sf_city$bfs_nummer)
+  
+  # 1. Grille hexagonale sur cette ville uniquement
+  hex_grid <- st_make_grid(
+    sf_city, 
+    cellsize = hex_size, 
+    square = FALSE
+  ) %>% 
+    st_sf() %>% 
+    mutate(hex_id = paste0(city_code, "_", row_number()))
+  
+  # 2. Joindre points aux hexagones
+  sf_with_hex <- st_join(sf_city, hex_grid)
+  
+  # 3. Stats par hexagone
+  hex_stats <- sf_with_hex %>% 
+    st_drop_geometry() %>% 
+    filter(!is.na(hex_id)) %>%  # Virer les points hors grille
+    group_by(hex_id, bfs_nummer) %>% 
+    summarise(
+      n_points = n(),
+      pct_q1 = sum(ssep3d_local_4 == 1) / n() * 100,
+      pct_q2 = sum(ssep3d_local_4 == 2) / n() * 100, 
+      pct_q3 = sum(ssep3d_local_4 == 3) / n() * 100,
+      pct_q4 = sum(ssep3d_local_4 == 4) / n() * 100,
+      dominant_class = as.numeric(names(sort(table(ssep3d_local_4), decreasing = TRUE))[1]),
+      dominant_pct = max(pct_q1, pct_q2, pct_q3, pct_q4),
+      .groups = "drop"
+    ) %>% 
+    filter(n_points >= min_points) %>% 
+    mutate(
+      dominance_type = case_when(
+        dominant_pct >= 60 ~ paste0("Dominant Q", dominant_class),
+        dominant_pct >= 40 ~ paste0("Mixed (Q", dominant_class, " majority)"),
+        TRUE ~ "Highly mixed"
+      )
+    )
+  
+  # 4. Géométrie finale
+  hex_final <- hex_grid %>% 
+    inner_join(hex_stats, by = "hex_id")
+  
+  return(hex_final)
+}
+
+# Fonction principale : traiter toutes les villes
+create_hex_aggregation <- function(sf_data, hex_size = 200, min_points = 5) {
+  
+  # Split par ville
+  sf_by_city <- split(sf_data, sf_data$bfs_nummer)
+  
+  # Traitement ville par ville
+  hex_list <- map(sf_by_city, ~create_hex_city(.x, hex_size, min_points))
+  
+  # Recoller tout
+  hex_combined <- bind_rows(hex_list)
+  
+  return(hex_combined)
+}
+
+# Utilisation
+sf_hex <- create_hex_aggregation(sf, hex_size = 100, min_points = 5)
+
+# Vérification
+sf_hex %>% 
+  st_drop_geometry() %>% 
+  count(dominance_type, sort = TRUE)
+
+# Export pour Mapbox/web
+sf::st_write(
+  sf_hex, 
+  "data_output/hex_aggregated_ses.geojson", 
+  delete_dsn = TRUE
+)
+```
+
+```{r}
+
+sf_hex_mapbox <- sf_hex %>% 
+  filter(bfs_nummer %in% c(3203, 5586, 6621)) %>% 
+  select(bfs_nummer, n_points, dominant_class) %>% 
+  st_transform(4326) %>% 
+  write_sf("data_output/mapbox/sep_hex.geojson", delete_dsn = TRUE)
+```
+
+## Create Mapbox municipalities boundaries without lakes
+
+```{r}
+
+# Enlever les lacs des limites communales
+sf_cities_10 <- st_difference(sf_cities_10, st_union(sf_lakes))
+
+sf_cities_10 %>% 
+  select(bfs_nummer, name) %>% 
+  st_transform(4326) %>% 
+  write_sf("data_output/mapbox/cities.geojson", delete_dsn = TRUE)
+```
+
+## Find centroides coordinates
+
+```{r}
+
+# Calculer les centroïdes des villes (après suppression des lacs)
+city_centroids <- sf_cities_10 %>%
+  # Transformer en WGS84 (EPSG:4326) pour Mapbox
+  st_transform(4326) %>%
+  # Calculer les centroïdes
+  st_centroid() %>%
+  # Extraire les coordonnées
+  mutate(
+    longitude = st_coordinates(.)[,1],
+    latitude = st_coordinates(.)[,2]
+  ) %>%
+  # Supprimer la géométrie et garder seulement les données tabulaires
+  st_drop_geometry() %>%
+  # Sélectionner les colonnes utiles
+  select(bfs_nummer, name, longitude, latitude)
+
+# Ajouter les noms en anglais si nécessaire
+cities_translation <- tibble(
+  bfs_nummer = c(261, 6621, 2701, 5586, 351, 230, 1061, 3203, 5192, 371),
+  name_en = c(
+    "Zurich", "Geneva", "Basel", "Lausanne", "Bern", 
+    "Winterthur", "Lucerne", "St. Gallen", "Lugano", "Biel/Bienne"
+  )
+)
+
+city_centroids <- city_centroids %>%
+  left_join(cities_translation, by = "bfs_nummer")
+
+# Afficher le résultat
+print(city_centroids)
+
+# Export optionnel pour Mapbox
+write_csv(city_centroids, "data_output/city_centroids_mapbox.csv")
+```
