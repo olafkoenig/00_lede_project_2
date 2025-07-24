@@ -928,6 +928,8 @@ if (!dir.exists(output_dir)) {
 export_for_mapbox <- function(hotspots_sf, filename) {
   if(nrow(hotspots_sf) > 0) {
     hotspots_wgs84 <- st_transform(hotspots_sf, 4326)
+    hotspots_wgs84 <- hotspots_wgs84 %>% 
+      select(city, category, indicator)
     st_write(hotspots_wgs84, 
              file.path(output_dir, filename), 
              delete_dsn = TRUE)
@@ -949,7 +951,116 @@ cat("Seuil d'anonymisation: minimum 10 ménages par hotspot\n")
 cat("Fichiers prêts pour Mapbox dans:", output_dir, "\n")
 ```
 
-### 
+### Clean overlaps / silvers 
+
+```{r}
+
+gap_fill_area <- "200m2"
+sliver_control <- 1
+
+# Fonction pour nettoyer les hotspots avec mapshaper dissolve2
+clean_hotspots_with_mapshaper <- function(hotspots_sf, 
+                                         indicator_name,
+                                         output_dir = "data_output/mapbox",
+                                         gap_fill_area = "200m2",
+                                         sliver_control = 1) {
+  
+  if(nrow(hotspots_sf) == 0) {
+    cat("❌ Aucun hotspot pour", indicator_name, "\n")
+    return(NULL)
+  }
+  
+  # Créer le répertoire si nécessaire
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = TRUE)
+  }
+  
+  # Transformer en WGS84
+  hotspots_wgs84 <- st_transform(hotspots_sf, 4326)
+  
+  # Fichiers temporaires
+  temp_input <- file.path(output_dir, paste0("temp_", indicator_name, "_input.geojson"))
+  temp_output <- file.path(output_dir, paste0("temp_", indicator_name, "_cleaned.geojson"))
+  final_output <- file.path(output_dir, paste0("hotspots_", indicator_name, "_final.geojson"))
+  
+  # Export temporaire
+  st_write(hotspots_wgs84, temp_input, delete_dsn = TRUE, quiet = TRUE)
+  
+  # Commande mapshaper avec dissolve2
+  mapshaper_cmd <- paste0(
+    'mapshaper "', normalizePath(temp_input), '" ',
+    '-dissolve2 category ',
+    'gap-fill-area=', gap_fill_area, ' ',
+    'sliver-control=', sliver_control, ' ',
+    '-clean ',
+    '-o "', normalizePath(final_output, mustWork = FALSE), '"'
+  )
+  
+  cat("🔧 Nettoyage", indicator_name, "avec dissolve2...\n")
+  cat("Commande:", mapshaper_cmd, "\n")
+  
+  # Exécuter la commande
+  result <- system(mapshaper_cmd, intern = TRUE)
+  
+  # Vérifier le résultat
+  if(file.exists(final_output)) {
+    cleaned_sf <- st_read(final_output, quiet = TRUE)
+    cat("✅", indicator_name, ":", nrow(hotspots_wgs84), "→", nrow(cleaned_sf), "polygones\n")
+    
+    # Statistiques rapides
+    if("n_households" %in% names(hotspots_wgs84)) {
+      cat("   Ménages avant:", sum(hotspots_wgs84$n_households, na.rm = TRUE), "\n")
+    }
+    cat("   Fichier:", file.size(final_output), "bytes\n\n")
+    
+    # Nettoyer fichiers temporaires
+    file.remove(temp_input)
+    
+    return(final_output)
+  } else {
+    cat("❌ Erreur lors du nettoyage de", indicator_name, "\n")
+    return(NULL)
+  }
+}
+
+# Appliquer le nettoyage aux 3 indicateurs
+output_dir <- "data_output/mapbox"
+
+# Nettoyer chaque indicateur
+green_cleaned <- clean_hotspots_with_mapshaper(
+  hotspots_green_clean, 
+  "green",
+  output_dir,
+  gap_fill_area = gap_fill_area,
+  sliver_control = sliver_control
+)
+
+noise_cleaned <- clean_hotspots_with_mapshaper(
+  hotspots_noise_clean, 
+  "noise", 
+  output_dir,
+  gap_fill_area = gap_fill_area,
+  sliver_control = sliver_control
+)
+
+no2_cleaned <- clean_hotspots_with_mapshaper(
+  hotspots_no2_clean, 
+  "no2",
+  output_dir,
+  gap_fill_area = gap_fill_area, 
+  sliver_control = sliver_control
+)
+
+# Résumé final
+cat("🎯 FICHIERS FINAUX NETTOYÉS\n")
+final_files <- list.files(output_dir, pattern = "hotspots_.*_final\\.geojson", full.names = TRUE)
+for(f in final_files) {
+  filename <- basename(f)
+  size_kb <- round(file.size(f) / 1024, 1)
+  n_features <- nrow(st_read(f, quiet = TRUE))
+  cat("📁", filename, "-", size_kb, "KB -", n_features, "polygones\n")
+}
+```
 
 # Inequalities (SSEP "pure")
 
