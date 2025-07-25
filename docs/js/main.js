@@ -234,11 +234,14 @@ console.log(
         // Handle rotation animation
         if (chapter.rotateAnimation) {
           map.once("moveend", () => {
-            const rotateNumber = map.getBearing();
-            map.rotateTo(rotateNumber + 30, {
-              duration: 15000,
+            const currentBearing = map.getBearing();
+
+            // Rotation continue avec un seul rotateTo mais plus long
+            map.rotateTo(currentBearing + 180, {
+              // Demi-tour depuis position actuelle
+              duration: 120000, // 120 secondes
               easing: function (t) {
-                return t;
+                return t; // Linéaire
               },
             });
           });

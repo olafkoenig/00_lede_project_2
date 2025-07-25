@@ -95,7 +95,7 @@ var config = {
         return config.getLocation(config.cities.stgallen, "cityDetail", 30, 0);
       },
       mapAnimation: "flyTo",
-      rotateAnimation: false,
+      rotateAnimation: true,
       onChapterEnter: [
         {
           layer: "sep-hex-a6zlrk",
@@ -124,7 +124,7 @@ var config = {
         return config.getLocation(config.cities.stgallen, "cityDetail", 30, 0);
       },
       mapAnimation: "flyTo",
-      rotateAnimation: false,
+      rotateAnimation: true,
       onChapterEnter: [
         {
           layer: "no2-3203-stgallen-b3xclo",
@@ -147,10 +147,10 @@ var config = {
       description:
         "63% des ménages modestes respirent un air pollué, contre seulement 14% des ménages aisés. Un écart de 49 points - le record suisse.",
       getLocation: function () {
-        return config.getLocation(config.cities.stgallen, "cityZoom", 20, 45);
+        return config.getLocation(config.cities.stgallen, "cityDetail", 30, 0);
       },
       mapAnimation: "flyTo",
-      rotateAnimation: false,
+      rotateAnimation: true,
       onChapterEnter: [],
       onChapterExit: [
         {
