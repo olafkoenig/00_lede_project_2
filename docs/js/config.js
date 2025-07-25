@@ -51,7 +51,7 @@ var config = {
 
   // Helper function to get responsive chart image
   getChartImage: function (baseName) {
-    const isMobile = window.innerWidth <= 750;
+    const isMobile = window.innerWidth <= 600;
     const suffix = isMobile ? "-mobile" : "-desktop";
     return `./charts/${baseName}${suffix}.png`;
   },
@@ -62,9 +62,9 @@ var config = {
       id: "intro-overview",
       alignment: "right",
       hidden: false,
-      title: "St. Gallen vue du ciel",
+      title: "St. Gallen from above",
       description:
-        "St. Gallen, 76'000 habitants. Vue du ciel, une ville tranquille au pied des Alpes. Mais cette apparente homogénéité cache les plus fortes inégalités environnementales de Suisse.",
+        "St. Gallen, population 76,000. From above, it looks like a quiet town near Lake Constance. But beneath this apparent uniformity lies one of the most striking environmental inequalities among Switzerland's major cities.",
       getLocation: function () {
         return config.getLocation(
           config.cities.stgallen,
@@ -88,9 +88,9 @@ var config = {
       id: "revelation-ses",
       alignment: "right",
       hidden: false,
-      title: "La géographie sociale",
+      title: "The social geography",
       description:
-        "Chaque point représente un ménage, coloré selon son statut socio-économique. Rouge : les plus modestes. Orange : les plus aisés.",
+        "Each hexagon represents households, with the color corresponding to their dominant socioeconomic status. Red: low income. Orange: high income.",
       getLocation: function () {
         return config.getLocation(config.cities.stgallen, "cityDetail", 30, 0);
       },
@@ -109,16 +109,13 @@ var config = {
       id: "pollution-shock",
       alignment: "right",
       hidden: false,
-      title: "Le choc de la pollution",
+      title: "Air pollution",
       description:
         "Ajoutons maintenant la pollution à l'air. Les zones rouges dépassent les seuils de l'OMS.",
       chart: {
-        title: "Pollution NO₂ à St. Gallen",
-        subtitle: "Concentration par quartier",
         getImage: function () {
           return config.getChartImage("stgallen-no2-scatter");
         },
-        source: "Source: Office fédéral de l'environnement",
       },
       getLocation: function () {
         return config.getLocation(config.cities.stgallen, "cityDetail", 30, 0);
@@ -323,7 +320,7 @@ var config = {
         title: "Cumul des inégalités à Lausanne",
         subtitle: "Pollution, espaces verts et statut social",
         getImage: function () {
-          return config.getChartImage("lausanne-multiple-scatter");
+          return config.getChartImage("lausanne-green-scatter");
         },
         source: "Source: Offices fédéraux",
       },
