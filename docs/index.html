@@ -32,15 +32,15 @@
     <div class="article-section pre-scrollytelling">
       <!-- Article Header -->
       <div class="header">
-        <p class="kicker">Inégalités environnementales</p>
+        <p class="kicker">Environmental Inequalities in Swiss Cities</p>
         <h1 class="headline">
           L'air qu'on respire selon l'adresse qu'on habite
         </h1>
         <h2 class="subhead">
           Dans les villes suisses, la pollution suit la géographie sociale
         </h2>
-        <p class="byline">Par [Votre nom]</p>
-        <p class="date">Juillet 2025</p>
+        <p class="byline">By Olaf König</p>
+        <p class="date">July 2025</p>
       </div>
 
       <!-- Introduction Text -->
@@ -87,25 +87,33 @@
         </p>
 
         <!-- Chart section -->
-        <div class="chart-section">
-          <div class="chart-row">
-            <div class="chart">
-              <p class="chart-title">Comparaison des inégalités par ville</p>
-              <p class="chart-subhead">
-                Écarts de pollution entre quartiers riches et pauvres
-              </p>
-              <!-- Votre graphique de synthèse ici -->
-              <img
-                src="./charts/synthesis-comparison.png"
-                alt="Comparaison des inégalités"
-                style="width: 100%; max-width: 600px"
-              />
-              <p class="chart-source">
-                Source: Analyse des auteurs, données OFEV
-              </p>
-            </div>
-          </div>
-        </div>
+        <iframe
+          title="Wide Divide in Environmental Amenities Between Socio-Economic Extremes in Switzerland’s 10 Largest Cities"
+          aria-label="Range Plot"
+          id="datawrapper-chart-iLHkd"
+          src="https://datawrapper.dwcdn.net/iLHkd/8/"
+          scrolling="no"
+          frameborder="0"
+          style="width: 0; min-width: 100% !important; border: none"
+          height="1301"
+          data-external="1"
+        ></iframe>
+        <script type="text/javascript">
+          !(function () {
+            "use strict";
+            window.addEventListener("message", function (a) {
+              if (void 0 !== a.data["datawrapper-height"]) {
+                var e = document.querySelectorAll("iframe");
+                for (var t in a.data["datawrapper-height"])
+                  for (var r, i = 0; (r = e[i]); i++)
+                    if (r.contentWindow === a.source) {
+                      var d = a.data["datawrapper-height"][t] + "px";
+                      r.style.height = d;
+                    }
+              }
+            });
+          })();
+        </script>
 
         <p class="body-text serif">
           Duis aute irure dolor in reprehenderit in voluptate velit esse cillum
