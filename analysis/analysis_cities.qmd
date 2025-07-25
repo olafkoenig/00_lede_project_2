@@ -426,6 +426,12 @@ sf_grouped <- sf_grouped %>%
 #   write_sf("data_input/data_edit/cities_reclassified.gpkg")
 ```
 
+### Import
+
+```{r}
+sf_grouped <- read_sf("data_input/data_edit/cities_reclassified.gpkg")
+```
+
 ## Making scatterplot template
 
 #### Helper: descritptive statistics to adjust axes
@@ -597,16 +603,122 @@ dw_batch_charts_by_indicator <- function(
 
 ```
 
-### Read dw charts files
+### Read dw scatterplots files
 
 ```{r}
 
 chart_results <- readRDS("data_output/scatterplot_chart_ids.RData")
 ```
 
+### Export dw scatterplot PNGs
+
+```{r}
+
+library(magick)
+
+export_dw_charts <- function(chart_ids, export_dir = "data_output/datawrapper/") {
+  if (!dir.exists(export_dir)) dir.create(export_dir, recursive = TRUE)
+  lapply(chart_ids, function(id) {
+    # Desktop 400px
+    png_400 <- dw_export_chart(
+      chart_id      = id,
+      type          = "png",
+      unit          = "px",
+      width         = 600,
+      mode          = "rgb",
+      plain         = FALSE, # titre header and footer in
+      border_width  = 0,
+      transparent   = FALSE,
+      api_key       = "environment"
+    )
+    image_write(png_400, file.path(export_dir, paste0(id, "_400px.png")))
+    # Mobile 320px
+    png_320 <- dw_export_chart(
+      chart_id      = id,
+      type          = "png",
+      unit          = "px",
+      width         = 320,
+      mode          = "rgb",
+      plain         = FALSE, # titre header and footer in
+      border_width  = 0,
+      transparent   = FALSE,
+      api_key       = "environment"
+    )
+    image_write(png_320, file.path(export_dir, paste0(id, "_320px.png")))
+  })
+}
+
+
+```
+
+### Export PNG TEST
+
+```{r}
+
+png_export_test <- chart_results %>% filter(city_id == 5586) %>% pull(chart_id)
+
+export_dw_charts(png_export_test)
+```
+
 ```{r}
 
 # chart_results %>% filter(city_id %in% list_cities_6) %>% select(city_id, iframe) %>% clipr::write_clip()
+```
+
+### Charts for scrollytelling WITH annotations
+
+```{r}
+
+
+# -------------- NO2 --------------
+-----------------------------------
+# St-Gall
+"https://app.datawrapper.de/edit/rffGE/visualize#refine"
+# Geneva
+"https://app.datawrapper.de/edit/8ZPgH/visualize#annotate"
+# Lausanne
+"https://app.datawrapper.de/edit/iPCow/visualize#refine"
+
+
+sf_grouped %>% filter(bfs_nummer == 6621) %>% 
+  select("ssep3", "no2", "ssep_no2_label") %>% 
+  dw_data_to_chart("8ZPgH")
+
+sf_grouped %>% filter(bfs_nummer == 5586) %>% 
+  select("ssep3", "no2", "ssep_no2_label") %>% 
+  dw_data_to_chart("iPCow")
+
+
+# -------------- NDVI --------------
+------------------------------------
+  # Lausanne 
+"https://app.datawrapper.de/edit/HfB0J/visualize#refine"
+
+# Genève
+"https://app.datawrapper.de/edit/qRJ8l/visualize#refine"
+
+sf_grouped %>% filter(bfs_nummer == 5586) %>% 
+  select("ssep3", "ndvi_200m", "ssep_ndvi_label") %>% 
+  mutate(ndvi_200m = ndvi_200m * 100) %>% 
+  dw_data_to_chart("HfB0J")
+
+sf_grouped %>% filter(bfs_nummer == 6621) %>% 
+  select("ssep3", "ndvi_200m", "ssep_ndvi_label") %>% 
+  mutate(ndvi_200m = ndvi_200m * 100) %>% 
+  dw_data_to_chart("qRJ8l")
+
+
+# List
+scatterplots_scrolly_ids <- c(
+  "rffGE",
+  "8ZPgH",
+  "iPCow",
+  "HfB0J",
+  "qRJ8l"
+)
+
+# Export PNGs
+
 ```
 
 ### HTML Small multiple panel creation
@@ -962,7 +1074,7 @@ cat("Seuil d'anonymisation: minimum 10 ménages par hotspot\n")
 cat("Fichiers prêts pour Mapbox dans:", output_dir, "\n")
 ```
 
-### Clean overlaps / silvers 
+### Clean overlaps / silvers
 
 ```{r}
 
