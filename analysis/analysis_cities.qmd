@@ -491,6 +491,8 @@ sf_grouped %>%
 
 ## DW Scatterplot batch production
 
+#### Function
+
 ```{r}
 
 library(dplyr)
@@ -578,19 +580,28 @@ dw_batch_charts_by_indicator <- function(
 
 ```
 
+### Production
+
 ```{r}
 
-bfs_list <- sf_grouped %>% 
-  st_drop_geometry() %>% 
-  pull(bfs_nummer) %>% 
-  unique()
+# bfs_list <- sf_grouped %>% 
+#   st_drop_geometry() %>% 
+#   pull(bfs_nummer) %>% 
+#   unique()
+# 
+# chart_results <- dw_batch_charts_by_indicator(
+#   df = sf_grouped,
+#   bfs_list = bfs_list,
+#   output_chart_infos = "data_output/scatterplot_chart_ids.RData"
+# )
 
-chart_results <- dw_batch_charts_by_indicator(
-  df = sf_grouped,
-  bfs_list = bfs_list,
-  output_chart_infos = "data_output/scatterplot_chart_ids.RData"
-)
+```
 
+### Read dw charts files
+
+```{r}
+
+chart_results <- readRDS("data_output/scatterplot_chart_ids.RData")
 ```
 
 ```{r}
