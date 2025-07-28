@@ -224,26 +224,31 @@ a:visited {
 
 /* Chart styles */
 .chart-container {
-    margin: 20px 0;
-    width: 100%;
-    text-align: center;
-    position: relative;      /* Conteneur de référence */
-    /* Gardez la bordure rouge pour l'instant */
-    /* border: 2px solid red; */
+  margin: 20px 0;
+  width: 100%;
+  text-align: center;
+  position: relative; /* Conteneur de référence */
+  /* Gardez la bordure rouge pour l'instant */
+  /* border: 2px solid red; */
 }
 
 .chart-container img {
-    width: auto;
-    max-width: 600px;
-    height: auto;
-    display: block;
-    position: relative;      /* Positionnement relatif */
-    left: 50%;              /* 50% depuis la gauche */
-    transform: translateX(-50%);  /* Recule de 50% de sa propre largeur */
-    /* border: 2px solid blue; */
+  width: auto;
+  max-width: 600px;
+  height: auto;
+  display: block;
+  position: relative; /* Positionnement relatif */
+  left: 50%; /* 50% depuis la gauche */
+  transform: translateX(-50%); /* Recule de 50% de sa propre largeur */
+  /* border: 2px solid blue; */
 }
 
-
+.legend {
+  width: auto;
+  max-width: 400px;
+  height: auto;
+  display: block;
+  margin: 15px auto;
 }
 
 .chart-title {

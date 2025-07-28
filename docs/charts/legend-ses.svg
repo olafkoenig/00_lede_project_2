@@ -1,0 +1,25 @@
+<svg width="400" height="80" xmlns="http://www.w3.org/2000/svg">
+  <!-- Titre aligné à gauche -->
+  <text x="20" y="20" text-anchor="start" font-family="IBM Plex Sans, sans-serif" font-size="14" font-weight="600" fill="#333">
+    Socioeconomic status
+  </text>
+  
+  <!-- Hexagones de couleur - rapprochés -->
+  <!-- Hexagone 1 - Violet foncé -->
+  <polygon points="40,35 55,27 70,35 70,51 55,59 40,51" fill="hsl(285, 49%, 39%)" stroke="#333" stroke-width="0.5"/>
+  
+  <!-- Hexagone 2 - Violet clair -->
+  <polygon points="90,35 105,27 120,35 120,51 105,59 90,51" fill="hsl(281, 30%, 73%)" stroke="#333" stroke-width="0.5"/>
+  
+  <!-- Hexagone 3 - Vert clair -->
+  <polygon points="140,35 155,27 170,35 170,51 155,59 140,51" fill="hsl(114, 45%, 74%)" stroke="#333" stroke-width="0.5"/>
+  
+  <!-- Hexagone 4 - Vert foncé -->
+  <polygon points="190,35 205,27 220,35 220,51 205,59 190,51" fill="hsl(144, 100%, 27%)" stroke="#333" stroke-width="0.5"/>
+  
+  <!-- Labels sous les hexagones -->
+  <text x="55" y="75" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="#666">Lowest</text>
+  <text x="105" y="75" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="#666">Low</text>
+  <text x="155" y="75" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="#666">High</text>
+  <text x="205" y="75" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="#666">Highest</text>
+</svg>

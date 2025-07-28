@@ -121,6 +121,14 @@ console.log(
         chapter.appendChild(chartContainer);
       }
 
+      // Add legend if present
+      if (record.legend) {
+        const legendImg = document.createElement("img");
+        legendImg.src = record.legend.image;
+        legendImg.classList.add("legend");
+        chapter.appendChild(legendImg);
+      }
+
       // Set up container
       container.setAttribute("id", record.id);
       container.classList.add("step");
@@ -177,13 +185,6 @@ console.log(
         : chartConfig.image;
       chartImage.alt = chartConfig.title || "Graphique";
       chartContainer.appendChild(chartImage);
-    }
-
-    if (chartConfig.source) {
-      const chartSource = document.createElement("div");
-      chartSource.classList.add("chart-source");
-      chartSource.innerText = chartConfig.source;
-      chartContainer.appendChild(chartSource);
     }
 
     return chartContainer;

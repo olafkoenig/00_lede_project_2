@@ -718,7 +718,7 @@ scatterplots_scrolly_ids <- c(
 )
 
 # Export PNGs
-
+export_dw_charts(scatterplots_scrolly_ids)
 ```
 
 ### HTML Small multiple panel creation

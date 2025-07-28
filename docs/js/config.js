@@ -84,6 +84,33 @@ var config = {
       ],
       onChapterExit: [],
     },
+
+    {
+      id: "no2-pollution",
+      alignment: "right",
+      hidden: false,
+      title: "Air pollution in St. Gallen",
+      description:
+        "Each hexagon represents households, with the color corresponding to their dominant socioeconomic status. Red: low income. Orange: high income.",
+      legend: {
+        image: "./charts/legend-no2.svg",
+        position: "bottom", // ou 'top'
+      },
+      getLocation: function () {
+        return config.getLocation(config.cities.stgallen, "cityDetail", 30, 0);
+      },
+      mapAnimation: "flyTo",
+      rotateAnimation: true,
+      onChapterEnter: [
+        {
+          layer: "no2-3203-stgallen-b3xclo",
+          opacity: 1,
+          duration: 2000,
+        },
+      ],
+      onChapterExit: [],
+    },
+
     {
       id: "revelation-ses",
       alignment: "right",
@@ -105,6 +132,7 @@ var config = {
       ],
       onChapterExit: [],
     },
+
     {
       id: "pollution-shock",
       alignment: "right",
@@ -148,10 +176,16 @@ var config = {
       },
       mapAnimation: "flyTo",
       rotateAnimation: true,
-      onChapterEnter: [],
+      onChapterEnter: [
+        {
+          layer: "hotspots-no2-final-972i4m",
+          opacity: 1,
+          duration: 1000,
+        },
+      ],
       onChapterExit: [
         {
-          layer: "cities-7uq93l",
+          layer: "hotspots-no2-final-972i4m",
           opacity: 0,
           duration: 1000,
         },
@@ -189,6 +223,7 @@ var config = {
         },
       ],
     },
+
     {
       id: "geneva-pollution-surprise",
       alignment: "right",
@@ -218,6 +253,32 @@ var config = {
       ],
       onChapterExit: [],
     },
+
+    {
+      id: "geneva-NDVI-surprise",
+      alignment: "right",
+      hidden: false,
+      title: "Look now to the green spaces",
+      description:
+        "Première surprise : riches et pauvres respirent pratiquement le même air pollué.",
+      legend: {
+        image: "./charts/legend-ndvi.svg",
+      },
+      getLocation: function () {
+        return config.getLocation(config.cities.geneva, "cityDetail", 30, 0);
+      },
+      mapAnimation: "flyTo",
+      rotateAnimation: false,
+      onChapterEnter: [
+        {
+          layer: "ndvi-6621-genve-agregat-byj24i",
+          opacity: 0.5,
+          duration: 2000,
+        },
+      ],
+      onChapterExit: [],
+    },
+
     {
       id: "geneva-green-revelation",
       alignment: "right",
