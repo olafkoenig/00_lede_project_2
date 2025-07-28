@@ -57,9 +57,13 @@ var config = {
   },
 
   // Scrollytelling chapters
+  //  ----------------------------------
+  // --------------ST. GALLEN --------------
+  //  ----------------------------------
   chapters: [
+    // ST. GALLEN SEQUENCE
     {
-      id: "intro-overview",
+      id: "stgallen-overview",
       alignment: "right",
       hidden: false,
       title: "St. Gallen from above",
@@ -69,7 +73,7 @@ var config = {
         return config.getLocation(
           config.cities.stgallen,
           "cityOverview",
-          15,
+          45,
           0
         );
       },
@@ -82,115 +86,206 @@ var config = {
           duration: 1000,
         },
       ],
-      onChapterExit: [],
+      onChapterExit: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 0,
+          duration: 500,
+        },
+      ],
     },
-
     {
-      id: "no2-pollution",
+      id: "stgallen-pollution",
       alignment: "right",
       hidden: false,
-      title: "Air pollution in St. Gallen",
+      title: "Air pollution revealed",
       description:
-        "Each hexagon represents households, with the color corresponding to their dominant socioeconomic status. Red: low income. Orange: high income.",
+        "Here we see NO₂ air pollution across the city. The most polluted areas cluster around highways and major roads – cars being the primary source of this pollutant. The WHO guideline is 10 μg/m³, while Swiss law allows 30 μg/m³.",
       legend: {
         image: "./charts/legend-no2.svg",
-        position: "bottom", // ou 'top'
       },
       getLocation: function () {
         return config.getLocation(config.cities.stgallen, "cityDetail", 30, 0);
       },
       mapAnimation: "flyTo",
-      rotateAnimation: true,
+      rotateAnimation: false,
       onChapterEnter: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 500,
+        },
         {
           layer: "no2-3203-stgallen-b3xclo",
           opacity: 1,
           duration: 2000,
         },
       ],
-      onChapterExit: [],
+      onChapterExit: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 0,
+          duration: 500,
+        },
+        {
+          layer: "no2-3203-stgallen-b3xclo",
+          opacity: 0.4,
+          duration: 500,
+        },
+      ],
     },
-
     {
-      id: "revelation-ses",
+      id: "stgallen-social-geography",
       alignment: "right",
       hidden: false,
-      title: "The social geography",
+      title: "The social map",
       description:
-        "Each hexagon represents households, with the color corresponding to their dominant socioeconomic status. Red: low income. Orange: high income.",
+        "Now let's see how the population is distributed across the city by socioeconomic status. The poorest households cluster near major roads and the city center, while wealthier residents live further away – enjoying cleaner air.",
+      legend: {
+        image: "./charts/legend-ses.svg",
+      },
       getLocation: function () {
         return config.getLocation(config.cities.stgallen, "cityDetail", 30, 0);
       },
       mapAnimation: "flyTo",
-      rotateAnimation: true,
+      rotateAnimation: false,
       onChapterEnter: [
         {
-          layer: "sep-hex-a6zlrk",
+          layer: "cities-7uq93l",
           opacity: 1,
+          duration: 500,
+        },
+        {
+          layer: "sep-hex-a6zlrk",
+          opacity: 0.8,
+          duration: 2000,
+        },
+        {
+          layer: "no2-3203-stgallen-b3xclo",
+          opacity: 0.4,
           duration: 2000,
         },
       ],
-      onChapterExit: [],
+      onChapterExit: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 500,
+        },
+        {
+          layer: "sep-hex-a6zlrk",
+          opacity: 0.8,
+          duration: 500,
+        },
+        {
+          layer: "no2-3203-stgallen-b3xclo",
+          opacity: 0.4,
+          duration: 500,
+        },
+      ],
     },
-
     {
-      id: "pollution-shock",
+      id: "stgallen-scatter-analysis",
       alignment: "right",
       hidden: false,
-      title: "Air pollution shock",
+      title: "Environmental inequality exposed",
       description:
-        "Ajoutons maintenant la pollution à l'air. Les zones rouges dépassent les seuils de l'OMS.",
+        "The chart below shows every household in St. Gallen plotted by income level and air pollution exposure. Each dot represents a household. The pattern is clear: wealthier families breathe cleaner air, while the poorest bear the burden of pollution.",
       chart: {
         getImage: function () {
           return config.getChartImage("stgallen-no2-scatter");
         },
       },
       getLocation: function () {
-        return config.getLocation(config.cities.stgallen, "cityDetail", 30, 0);
+        return config.getLocation(config.cities.stgallen, "cityDetail", 25, 0);
       },
       mapAnimation: "flyTo",
-      rotateAnimation: true,
+      rotateAnimation: false,
       onChapterEnter: [
         {
-          layer: "no2-3203-stgallen-b3xclo",
-          opacity: 0.8,
-          duration: 2000,
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 500,
         },
         {
           layer: "sep-hex-a6zlrk",
-          opacity: 0, // Hide socio-economic layer
+          opacity: 0.8,
           duration: 1000,
         },
-      ],
-      onChapterExit: [],
-    },
-    {
-      id: "explanation-stgallen",
-      alignment: "right",
-      hidden: false,
-      title: "L'écart révélateur",
-      description:
-        "63% des ménages modestes respirent un air pollué, contre seulement 14% des ménages aisés. Un écart de 49 points - le record suisse.",
-      getLocation: function () {
-        return config.getLocation(config.cities.stgallen, "cityDetail", 30, 0);
-      },
-      mapAnimation: "flyTo",
-      rotateAnimation: true,
-      onChapterEnter: [
         {
-          layer: "hotspots-no2-final-972i4m",
-          opacity: 1,
+          layer: "no2-3203-stgallen-b3xclo",
+          opacity: 0.4,
           duration: 1000,
         },
       ],
       onChapterExit: [
         {
-          layer: "hotspots-no2-final-972i4m",
+          layer: "cities-7uq93l",
           opacity: 0,
-          duration: 1000,
+          duration: 500,
+        },
+        {
+          layer: "sep-hex-a6zlrk",
+          opacity: 0,
+          duration: 500,
+        },
+        {
+          layer: "no2-3203-stgallen-b3xclo",
+          opacity: 0,
+          duration: 500,
         },
       ],
     },
+    {
+      id: "stgallen-inequality-gap",
+      alignment: "right",
+      hidden: false,
+      title: "Switzerland's biggest gap",
+      description:
+        "Here we see the stark divide: orange clusters show wealthy households breathing clean air, while red areas reveal poor families trapped in pollution. St. Gallen has the largest inequality gap among Swiss cities. Only 14% of wealthy households face pollution above 15 μg/m³, compared to 63% of the poorest families.",
+      getLocation: function () {
+        return config.getLocation(config.cities.stgallen, "cityZoom", 20, 15);
+      },
+      mapAnimation: "flyTo",
+      rotateAnimation: false,
+      onChapterEnter: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 500,
+        },
+        {
+          layer: "hotspots-no2-final-972i4m",
+          opacity: 0.8,
+          duration: 2000,
+        },
+        {
+          layer: "no2-3203-stgallen-b3xclo",
+          opacity: 0.4,
+          duration: 1000,
+        },
+      ],
+      onChapterExit: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 0,
+          duration: 500,
+        },
+        {
+          layer: "hotspots-no2-final-972i4m",
+          opacity: 0,
+          duration: 500,
+        },
+        {
+          layer: "no2-3203-stgallen-b3xclo",
+          opacity: 0,
+          duration: 500,
+        },
+      ],
+    },
+    //  ----------------------------------
+    // --------------GENEVA --------------
+    //  ----------------------------------
     {
       id: "transition-geneva",
       alignment: "right",
