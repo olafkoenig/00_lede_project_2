@@ -38,8 +38,6 @@ console.log(
         layerConfig.opacity
       );
 
-
-      
       const paintProps = LayerManager.getLayerPaintType(layerConfig.layer); // Changé ici !
       console.log("Paint properties for this layer:", paintProps);
 
@@ -63,28 +61,26 @@ console.log(
     },
   };
 
-
-// Fonction globale pour reset des layers
-function resetAllLayers() {
+  // Fonction globale pour reset des layers
+  function resetAllLayers() {
     const layersToReset = [
-        'sep-hex-a6zlrk',
-        'no2-3203-stgallen-b3xclo',
-        'no2-6621-genve-d5em82',
-        'no2-5586-lausanne-15f02e',
-        'ndvi-6621-genve-agregat-byj24i',
-        'ndvi-5586-lausanne-agregat-288ezd'
+      "sep-hex-a6zlrk",
+      "no2-3203-stgallen-b3xclo",
+      "no2-6621-genve-d5em82",
+      "no2-5586-lausanne-15f02e",
+      "ndvi-6621-genve-agregat-byj24i",
+      "ndvi-5586-lausanne-agregat-288ezd",
+      "hotspots-no2-final-972i4m",
+      "hotspots-green-final-72df90",
+      "hotspots-noise-final-avjjjy",
     ];
-    
-    layersToReset.forEach(layerId => {
-        if (map.getLayer(layerId)) {
-            map.setPaintProperty(layerId, 'fill-opacity', 0);
-        }
+
+    layersToReset.forEach((layerId) => {
+      if (map.getLayer(layerId)) {
+        map.setPaintProperty(layerId, "fill-opacity", 0);
+      }
     });
-}
-
-// Alignment mapping (code qui continue...)
-const alignments = {
-
+  }
 
   // Alignment mapping
   const alignments = {
@@ -341,6 +337,8 @@ const alignments = {
         "ndvi-6621-genve-agregat-byj24i", // espaces verts Genève
         "ndvi-5586-lausanne-agregat-288ezd", // espaces verts Lausanne
         "hotspots-noise-final-avjjjy", // hotspots noise
+        "hotspots-no2-final-972i4m", // hotspots no2
+        "hotspots-green-final-72df90", // hotspots ndvi
       ];
 
       layersToHide.forEach((layerId) => {

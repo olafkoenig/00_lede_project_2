@@ -109,7 +109,7 @@ var config = {
       id: "pollution-shock",
       alignment: "right",
       hidden: false,
-      title: "Air pollution",
+      title: "Air pollution shock",
       description:
         "Ajoutons maintenant la pollution à l'air. Les zones rouges dépassent les seuils de l'OMS.",
       chart: {
