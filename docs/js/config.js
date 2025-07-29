@@ -209,7 +209,7 @@ var config = {
         },
         {
           layer: "sep-hex-a6zlrk",
-          opacity: 0.8,
+          opacity: 0,
           duration: 1000,
         },
         {
@@ -217,11 +217,16 @@ var config = {
           opacity: 0.4,
           duration: 1000,
         },
+        {
+          layer: "hotspots-no2-final-972i4m",
+          opacity: 0.8,
+          duration: 4000,
+        },
       ],
       onChapterExit: [
         {
           layer: "cities-7uq93l",
-          opacity: 0,
+          opacity: 1,
           duration: 500,
         },
         {
@@ -231,7 +236,7 @@ var config = {
         },
         {
           layer: "no2-3203-stgallen-b3xclo",
-          opacity: 0,
+          opacity: 0.5,
           duration: 500,
         },
       ],
