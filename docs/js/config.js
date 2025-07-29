@@ -89,7 +89,7 @@ var config = {
       onChapterExit: [
         {
           layer: "cities-7uq93l",
-          opacity: 0,
+          opacity: 1,
           duration: 500,
         },
       ],
@@ -124,7 +124,7 @@ var config = {
       onChapterExit: [
         {
           layer: "cities-7uq93l",
-          opacity: 0,
+          opacity: 1,
           duration: 500,
         },
         {
@@ -291,53 +291,43 @@ var config = {
     //  ----------------------------------
     // --------------GENEVA --------------
     //  ----------------------------------
+    // GENEVA SEQUENCE
     {
-      id: "transition-geneva",
+      id: "geneva-overview",
       alignment: "right",
       hidden: false,
-      title: "Direction Genève",
+      title: "The dense metropolis",
       description:
-        "Direction Genève, 200'000 habitants. Une ville dense, internationale, au bord du lac.",
+        "Welcome to Geneva, population 200,000. A dense, international city on the shores of Lake Geneva. This urban intensity creates a unique environmental story.",
       getLocation: function () {
         return config.getLocation(config.cities.geneva, "cityOverview", 45, 0);
       },
       mapAnimation: "flyTo",
-      rotateAnimation: false,
+      rotateAnimation: true,
       onChapterEnter: [
         {
-          layer: "no2-3203-stgallen-b3xclo",
-          opacity: 0,
-          duration: 500,
-        },
-        {
-          layer: "sep-hex-a6zlrk",
-          opacity: 0,
-          duration: 500,
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 4000,
         },
       ],
       onChapterExit: [
         {
           layer: "cities-7uq93l",
           opacity: 1,
-          duration: 1000,
+          duration: 500,
         },
       ],
     },
-
     {
-      id: "geneva-pollution-surprise",
+      id: "geneva-pollution",
       alignment: "right",
       hidden: false,
-      title: "Première surprise",
+      title: "Dense air, shared burden",
       description:
-        "Première surprise : riches et pauvres respirent pratiquement le même air pollué.",
-      chart: {
-        title: "Pollution NO₂ à Genève",
-        subtitle: "Quasi-égalité face à la pollution",
-        getImage: function () {
-          return config.getChartImage("geneva-no2-scatter");
-        },
-        source: "Source: Office fédéral de l'environnement",
+        "Geneva's exceptional density, compared to other Swiss cities, creates widespread NO₂ air pollution. The urban fabric traps emissions across the entire metropolitan area.",
+      legend: {
+        image: "./charts/legend-no2.svg",
       },
       getLocation: function () {
         return config.getLocation(config.cities.geneva, "cityDetail", 30, 0);
@@ -346,21 +336,148 @@ var config = {
       rotateAnimation: false,
       onChapterEnter: [
         {
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 500,
+        },
+        {
           layer: "no2-6621-genve-d5em82",
-          opacity: 0.5,
+          opacity: 0.8,
           duration: 2000,
         },
       ],
-      onChapterExit: [],
+      onChapterExit: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 500,
+        },
+        {
+          layer: "no2-6621-genve-d5em82",
+          opacity: 0.4,
+          duration: 500,
+        },
+      ],
     },
-
     {
-      id: "geneva-NDVI-surprise",
+      id: "geneva-equalizing-density",
       alignment: "right",
       hidden: false,
-      title: "Look now to the green spaces",
+      title: "When density equalizes exposure",
       description:
-        "Première surprise : riches et pauvres respirent pratiquement le même air pollué.",
+        "Adding households by socioeconomic class reveals something remarkable: nearly all families, regardless of income, face high pollution levels above 15 μg/m³. Density creates an unexpected equality of exposure.",
+      legend: {
+        image: "./charts/legend-ses.svg",
+      },
+      getLocation: function () {
+        return config.getLocation(config.cities.geneva, "cityDetail", 30, 0);
+      },
+      mapAnimation: "flyTo",
+      rotateAnimation: false,
+      onChapterEnter: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 500,
+        },
+        {
+          layer: "no2-6621-genve-d5em82",
+          opacity: 0.4,
+          duration: 1000,
+        },
+        {
+          layer: "sep-hex-a6zlrk",
+          opacity: 0.8,
+          duration: 2000,
+        },
+      ],
+      onChapterExit: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 500,
+        },
+        {
+          layer: "no2-6621-genve-d5em82",
+          opacity: 0.4,
+          duration: 500,
+        },
+        {
+          layer: "sep-hex-a6zlrk",
+          opacity: 0.4,
+          duration: 500,
+        },
+      ],
+    },
+    {
+      id: "geneva-equal-pollution",
+      alignment: "right",
+      hidden: false,
+      title: "Pollution without privilege",
+      description:
+        'The scatter plot reveals Geneva\'s unique pattern: an "egalitarian" exposure to pollution where rich and poor households breathe similarly polluted air. Urban density has leveled the playing field – at least for air quality.',
+      chart: {
+        getImage: function () {
+          return config.getChartImage("geneva-no2-scatter");
+        },
+      },
+      getLocation: function () {
+        return config.getLocation(config.cities.geneva, "cityDetail", 25, 0);
+      },
+      mapAnimation: "flyTo",
+      rotateAnimation: false,
+      onChapterEnter: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 500,
+        },
+        {
+          layer: "no2-6621-genve-d5em82",
+          opacity: 0.4,
+          duration: 1000,
+        },
+        {
+          layer: "sep-hex-a6zlrk",
+          opacity: 0,
+          duration: 1000,
+        },
+        {
+          layer: "hotspots-no2-final-972i4m",
+          opacity: 0.8,
+          duration: 4000,
+        },
+      ],
+      onChapterExit: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 500,
+        },
+        {
+          layer: "no2-6621-genve-d5em82",
+          opacity: 0,
+          duration: 500,
+        },
+        {
+          layer: "sep-hex-a6zlrk",
+          opacity: 0,
+          duration: 500,
+        },
+        {
+          layer: "hotspots-no2-final-972i4m",
+          opacity: 0,
+          duration: 4000,
+        },
+      ],
+    },
+    {
+      id: "geneva-concrete-jungle",
+      alignment: "right",
+      hidden: false,
+      title: "Concrete center, green periphery",
+      description:
+        "Now let's examine vegetation density across the city. The hyper-dense city center leaves little room for greenery, while nature flourishes on the outskirts. In Geneva, green space is a geography of distance.",
       legend: {
         image: "./charts/legend-ndvi.svg",
       },
@@ -371,63 +488,143 @@ var config = {
       rotateAnimation: false,
       onChapterEnter: [
         {
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 500,
+        },
+        {
           layer: "ndvi-6621-genve-agregat-byj24i",
-          opacity: 0.5,
+          opacity: 0.8,
           duration: 2000,
         },
       ],
-      onChapterExit: [],
+      onChapterExit: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 500,
+        },
+        {
+          layer: "ndvi-6621-genve-agregat-byj24i",
+          opacity: 0.4,
+          duration: 500,
+        },
+      ],
     },
-
     {
-      id: "geneva-green-revelation",
+      id: "geneva-nature-privilege",
       alignment: "right",
       hidden: false,
-      title: "Mais la nature reste un privilège",
+      title: "The privilege of green",
       description:
-        "Mais la nature, elle, reste un privilège. Les espaces verts se concentrent dans les quartiers aisés.",
+        "This chart reveals spatial segregation in action. While vegetation is scarce citywide, wealthy households consistently access greener environments than their less affluent neighbors. Nature becomes a luxury good.",
       chart: {
-        title: "Espaces verts à Genève",
-        subtitle: "Accès inégal à la nature",
         getImage: function () {
           return config.getChartImage("geneva-green-scatter");
         },
-        source: "Source: Office fédéral de la statistique",
       },
       getLocation: function () {
-        return config.getLocation(config.cities.geneva, "cityDetail", 30, 0);
+        return config.getLocation(config.cities.geneva, "cityDetail", 25, 0);
       },
       mapAnimation: "flyTo",
       rotateAnimation: false,
       onChapterEnter: [
         {
-          layer: "no2-6621-genve-d5em82",
-          opacity: 0,
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 500,
+        },
+        {
+          layer: "sep-hex-a6zlrk",
+          opacity: 0.8,
           duration: 1000,
         },
         {
           layer: "ndvi-6621-genve-agregat-byj24i",
-          opacity: 0.7,
-          duration: 2000,
+          opacity: 0.4,
+          duration: 1000,
         },
       ],
-      onChapterExit: [],
+      onChapterExit: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 0,
+          duration: 500,
+        },
+        {
+          layer: "sep-hex-a6zlrk",
+          opacity: 0,
+          duration: 500,
+        },
+        {
+          layer: "ndvi-6621-genve-agregat-byj24i",
+          opacity: 0,
+          duration: 500,
+        },
+      ],
     },
     {
-      id: "geneva-contrast",
+      id: "geneva-paradox",
       alignment: "right",
       hidden: false,
-      title: "Le paradoxe genevois",
+      title: "The Geneva paradox",
       description:
-        "À Genève, la densité égalise la pollution, mais creuse l'accès à la nature.",
+        "The final picture is striking: 95% of the poorest households have limited access to green environments, compared to 72% of the wealthiest. In Geneva, density equalizes pollution exposure, but creates stark inequality in access to nature.",
       getLocation: function () {
-        return config.getLocation(config.cities.geneva, "cityDetail", 60, 90);
+        return config.getLocation(config.cities.geneva, "cityDetail", 45, 0);
       },
       mapAnimation: "flyTo",
       rotateAnimation: true,
-      onChapterEnter: [],
-      onChapterExit: [],
+      onChapterEnter: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 500,
+        },
+        {
+          layer: "sep-hex-a6zlrk",
+          opacity: 0.8,
+          duration: 1000,
+        },
+        {
+          layer: "ndvi-6621-genve-agregat-byj24i",
+          opacity: 0.4,
+          duration: 1000,
+        },
+        {
+          layer: "hotspots-green-final-72df90",
+          opacity: 0.9,
+          duration: 2000,
+        },
+      ],
+      onChapterExit: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 0,
+          duration: 500,
+        },
+        {
+          layer: "sep-hex-a6zlrk",
+          opacity: 0,
+          duration: 500,
+        },
+        {
+          layer: "ndvi-6621-genve-agregat-byj24i",
+          opacity: 0,
+          duration: 500,
+        },
+        {
+          layer: "hotspots-green-final-72df90",
+          opacity: 0,
+          duration: 500,
+        },
+      ],
     },
+    //  ----------------------------------
+    // --------------LAUSANNE --------------
+    //  ----------------------------------
+    //
+
     {
       id: "transition-lausanne",
       alignment: "right",
