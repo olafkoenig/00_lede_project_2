@@ -23,14 +23,14 @@ var config = {
     mobile: {
       cityOverview: 10,
       cityDetail: 11, // ← Actuel
-      cityDetailLausanne: 10 - 1, // ← Nouveau zoom spécial Lausanne
+      cityDetailLausanne: 11, // ← Nouveau zoom spécial Lausanne
       cityZoom: 11,
-      countryOverview: 7,
+      countryOverview: 7 - 1,
     },
     desktop: {
       cityOverview: 11,
       cityDetail: 12.5, // ← Actuel
-      cityDetailLausanne: 11.5 - 1.2, // ← Nouveau zoom spécial Lausanne
+      cityDetailLausanne: 12, // ← Nouveau zoom spécial Lausanne
       cityZoom: 12.5,
       countryOverview: 8,
     },
@@ -194,9 +194,9 @@ var config = {
       description:
         "The chart below shows every household in St. Gallen plotted by socioeconomic status and air pollution exposure. Each dot represents a household. The pattern is clear: wealthier families breathe cleaner air, while the poorest bear the burden of pollution.",
       chart: {
-        getImage: function () {
-          return config.getChartImage("stgallen-no2-scatter");
-        },
+        type: "datawrapper",
+        embedUrl: "https://datawrapper.dwcdn.net/rffGE/2/",
+        height: 654,
       },
       getLocation: function () {
         return config.getLocation(config.cities.stgallen, "cityDetail", 25, 0);
@@ -419,9 +419,9 @@ var config = {
       description:
         'The scatter plot reveals Geneva\'s unique pattern: an almost "egalitarian" exposure to pollution where rich and poor households breathe similarly polluted air. Urban density has leveled the playing field – at least for air quality.',
       chart: {
-        getImage: function () {
-          return config.getChartImage("geneva-no2-scatter");
-        },
+        type: "datawrapper",
+        embedUrl: "https://datawrapper.dwcdn.net/8ZPgH/1/",
+        height: 654,
       },
       getLocation: function () {
         return config.getLocation(config.cities.geneva, "cityDetail", 25, 0);
@@ -521,9 +521,9 @@ var config = {
       description:
         'This chart reveals spatial segregation in action. While vegetation is scarce citywide, <span style="background: #006600; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;households</span> consistently access greener environments than their <span style="background: #663399; color: white; padding: 0 0.3em; border-radius: 0.3em;">less&nbsp;affluent&nbsp;neighbors</span>. Nature becomes a luxury good.',
       chart: {
-        getImage: function () {
-          return config.getChartImage("geneva-green-scatter");
-        },
+        type: "datawrapper",
+        embedUrl: "https://datawrapper.dwcdn.net/qRJ8l/1/",
+        height: 654,
       },
       getLocation: function () {
         return config.getLocation(config.cities.geneva, "cityDetail", 25, 0);
@@ -670,7 +670,12 @@ var config = {
         image: "./charts/legend-noise.svg",
       },
       getLocation: function () {
-        return config.getLocation(config.cities.lausanne, "cityDetail", 30, 0);
+        return config.getLocation(
+          config.cities.lausanne,
+          "cityDetailLausanne",
+          30,
+          0
+        );
       },
       mapAnimation: "flyTo",
       rotateAnimation: false,
@@ -706,13 +711,13 @@ var config = {
       title: "Unequal exposure to noise",
       description:
         'Like in St. Gallen, <span style="background: #006600; color: white; padding: 0 0.3em; border-radius: 0.3em;">privileged&nbsp;households</span> enjoy quieter environments while <span style="background: #663399; color: white; padding: 0 0.3em; border-radius: 0.3em;">disadvantaged&nbsp;families</span> bear the burden of noise pollution in Lausanne.',
-      chart: {
-        getImage: function () {
-          return config.getChartImage("lausanne-noise-scatter");
-        },
-      },
       getLocation: function () {
-        return config.getLocation(config.cities.lausanne, "cityDetail", 25, 0);
+        return config.getLocation(
+          config.cities.lausanne,
+          "cityDetailLausanne",
+          25,
+          0
+        );
       },
       mapAnimation: "flyTo",
       rotateAnimation: false,
@@ -756,15 +761,20 @@ var config = {
       alignment: "right",
       hidden: false,
       title: "Geography of noise inequality",
+      chart: {
+        type: "datawrapper",
+        embedUrl: "https://datawrapper.dwcdn.net/MJu0Z/1/",
+        height: 654,
+      },
       description:
         'The divide is clear: <span style="background: #ff8c00; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;households cluster in the quiet east and north</span>, while <span style="background: #d32f2f; color: white; padding: 0 0.3em; border-radius: 0.3em;">poor&nbsp;families concentrate in the noisy center and west</span>.<br><br>In Lausanne, <strong>55% of the poorest households face noise above 50 dB, compared to just 28% of the wealthiest.</strong>',
-      chart: {
-        getImage: function () {
-          return config.getChartImage("lausanne-noise-scatter");
-        },
-      },
       getLocation: function () {
-        return config.getLocation(config.cities.lausanne, "cityZoom", 30, 15);
+        return config.getLocation(
+          config.cities.lausanne,
+          "cityDetailLausanne",
+          30,
+          15
+        );
       },
       mapAnimation: "flyTo",
       rotateAnimation: false,
@@ -824,7 +834,12 @@ var config = {
         image: "./charts/legend-ndvi.svg",
       },
       getLocation: function () {
-        return config.getLocation(config.cities.lausanne, "cityDetail", 30, 0);
+        return config.getLocation(
+          config.cities.lausanne,
+          "cityDetailLausanne",
+          30,
+          0
+        );
       },
       mapAnimation: "flyTo",
       rotateAnimation: false,
@@ -871,12 +886,17 @@ var config = {
       description:
         'The pattern mirrors the noise distribution: <span style="background: #ff8c00; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;green&nbsp;clusters</span> flourish in the leafy periphery of east and north Lausanne, while <span style="background: #d32f2f; color: white; padding: 0 0.3em; border-radius: 0.3em;">poor&nbsp;concrete&nbsp;clusters</span> are trapped in the dense city center.<br><br>The numbers tell a stark story: <strong>while 72% of wealthy households have limited green space nearby, this rises to 95% for the poorest families. Nature becomes another marker of privilege.</strong>',
       chart: {
-        getImage: function () {
-          return config.getChartImage("lausanne-green-scatter");
-        },
+        type: "datawrapper",
+        embedUrl: "https://datawrapper.dwcdn.net/HfB0J/1/",
+        height: 654,
       },
       getLocation: function () {
-        return config.getLocation(config.cities.lausanne, "cityZoom", 20, 15);
+        return config.getLocation(
+          config.cities.lausanne,
+          "cityDetailLausanne",
+          20,
+          15
+        );
       },
       mapAnimation: "flyTo",
       rotateAnimation: false,
@@ -921,7 +941,7 @@ var config = {
       hidden: false,
       title: "Three cities, one pattern",
       description:
-        "Three cities, three environmental indicators, one universal truth: <strong>where you live determines what you breathe, hear, and see.</strong><br><br>Across Switzerland's urban landscape, environmental quality follows the same troubling geography – one shaped by income, not justice.",
+        "Whether it’s air, noise, or greenery, the same story repeats: in Swiss cities, the environmental quality mirrors social inequality.<br><br>Let’s look at this pattern across Switzerland’s 10 largest cities.",
       getLocation: function () {
         return config.getLocation(
           config.cities.switzerland,

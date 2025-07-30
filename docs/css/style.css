@@ -222,25 +222,18 @@ a:visited {
   border-radius: 4px;
 }
 
-/* Chart styles */
+/* Chart styles - VERSION SIMPLE */
 .chart-container {
   margin: 20px 0;
   width: 100%;
-  text-align: center;
-  position: relative; /* Conteneur de référence */
-  /* Gardez la bordure rouge pour l'instant */
-  /* border: 2px solid red; */
 }
 
-.chart-container img {
-  width: auto;
+.chart-container iframe {
+  width: 100%;
   max-width: 600px;
-  height: auto;
+  margin-left: 10px;
   display: block;
-  position: relative; /* Positionnement relatif */
-  left: 50%; /* 50% depuis la gauche */
-  transform: translateX(-50%); /* Recule de 50% de sa propre largeur */
-  /* border: 2px solid blue; */
+  border: 0;
 }
 
 .legend {

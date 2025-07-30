@@ -38,7 +38,7 @@ console.log(
         layerConfig.opacity
       );
 
-      const paintProps = LayerManager.getLayerPaintType(layerConfig.layer); // Changé ici !
+      const paintProps = LayerManager.getLayerPaintType(layerConfig.layer);
       console.log("Paint properties for this layer:", paintProps);
 
       paintProps.forEach(function (prop) {
@@ -61,6 +61,73 @@ console.log(
     },
   };
 
+  // Fonction pour détecter quel step est actuellement visible
+  function getCurrentVisibleStep() {
+    const steps = document.querySelectorAll(".step");
+    const viewportHeight = window.innerHeight;
+    const threshold = viewportHeight * 0.5; // 50% de l'écran
+
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      const rect = step.getBoundingClientRect();
+
+      // Si le step est dans la zone de trigger (50% de l'écran)
+      if (rect.top <= threshold && rect.bottom >= threshold) {
+        console.log(`Current visible step: ${step.id} (index: ${i})`);
+        return {
+          element: step,
+          index: i,
+          chapter: config.chapters.find((chap) => chap.id === step.id),
+        };
+      }
+    }
+
+    // Fallback : retourner le premier step
+    return {
+      element: steps[0],
+      index: 0,
+      chapter: config.chapters[0],
+    };
+  }
+
+  // Fonction pour appliquer l'état d'un chapitre (position + layers)
+  function applyChapterState(chapter, skipAnimation = false) {
+    console.log("Applying chapter state for:", chapter.id);
+
+    // Reset tous les layers d'abord
+    resetAllLayers();
+
+    // Appliquer la position
+    const location = chapter.getLocation
+      ? chapter.getLocation()
+      : chapter.location;
+    const animationType = skipAnimation
+      ? "jumpTo"
+      : chapter.mapAnimation || "flyTo";
+    map[animationType](location);
+
+    // Appliquer les layers du chapitre
+    if (chapter.onChapterEnter.length > 0) {
+      // Petite pause pour laisser la carte se positionner avant d'appliquer les layers
+      setTimeout(
+        () => {
+          chapter.onChapterEnter.forEach(LayerManager.setLayerOpacity);
+        },
+        skipAnimation ? 100 : 1000
+      );
+    }
+
+    // Exécuter le callback si présent
+    if (chapter.callback) {
+      setTimeout(
+        () => {
+          window[chapter.callback]();
+        },
+        skipAnimation ? 200 : 1500
+      );
+    }
+  }
+
   // Fonction globale pour reset des layers
   function resetAllLayers() {
     const layersToReset = [
@@ -73,6 +140,7 @@ console.log(
       "hotspots-no2-final-972i4m",
       "hotspots-green-final-72df90",
       "hotspots-noise-final-avjjjy",
+      "noise-5586-lausanne-15xfvd",
     ];
 
     layersToReset.forEach((layerId) => {
@@ -149,13 +217,6 @@ console.log(
     });
 
     story.appendChild(features);
-
-    //     // Add footer
-    //     const footer = document.createElement("div");
-    //     footer.setAttribute("id", "footer");
-    //     footer.innerHTML =
-    //       "<p>Source: Offices fédéraux de l'environnement et de la statistique<br>Réalisé avec Mapbox</p>";
-    //     story.appendChild(footer);
   }
 
   // Create chart container with responsive image handling
@@ -177,7 +238,19 @@ console.log(
       chartContainer.appendChild(chartSubtitle);
     }
 
-    if (chartConfig.getImage || chartConfig.image) {
+    // Support pour Datawrapper
+    if (chartConfig.type === "datawrapper") {
+      const iframe = document.createElement("iframe");
+      iframe.src = chartConfig.embedUrl;
+      iframe.width = "100%";
+      iframe.height = (chartConfig.height || 400) + "px";
+      iframe.frameBorder = "0";
+      iframe.style.border = "none";
+      iframe.title = chartConfig.title || "Interactive chart";
+      chartContainer.appendChild(iframe);
+    }
+    // Support pour images PNG (existant)
+    else if (chartConfig.getImage || chartConfig.image) {
       const chartImage = document.createElement("img");
       // Use responsive image function if available, otherwise fallback to static image
       chartImage.src = chartConfig.getImage
@@ -187,6 +260,13 @@ console.log(
       chartContainer.appendChild(chartImage);
     }
 
+    if (chartConfig.source) {
+      const chartSource = document.createElement("div");
+      chartSource.classList.add("chart-source");
+      chartSource.innerText = chartConfig.source;
+      chartContainer.appendChild(chartSource);
+    }
+
     return chartContainer;
   }
 
@@ -194,18 +274,22 @@ console.log(
   function initializeMap() {
     mapboxgl.accessToken = config.accessToken;
 
-    const firstChapter = config.chapters[0];
-    const firstLocation = firstChapter.getLocation
-      ? firstChapter.getLocation()
-      : firstChapter.location;
+    // Détecter le step actuellement visible au lieu de prendre toujours le premier
+    const currentStep = getCurrentVisibleStep();
+    const currentChapter = currentStep.chapter;
+    const currentLocation = currentChapter.getLocation
+      ? currentChapter.getLocation()
+      : currentChapter.location;
+
+    console.log("Initializing map with current chapter:", currentChapter.id);
 
     window.map = new mapboxgl.Map({
       container: "map",
       style: config.style,
-      center: firstLocation.center,
-      zoom: firstLocation.zoom,
-      bearing: firstLocation.bearing,
-      pitch: firstLocation.pitch,
+      center: currentLocation.center,
+      zoom: currentLocation.zoom,
+      bearing: currentLocation.bearing,
+      pitch: currentLocation.pitch,
       interactive: false,
       projection: config.projection,
     });
@@ -329,18 +413,18 @@ console.log(
     const map = initializeMap();
 
     map.on("load", function () {
-      // Masquer tous les layers SAUF les frontières au démarrage
+      // Masquer tous les layers au démarrage
       const layersToHide = [
-        "sep-hex-a6zlrk", // households
-        "no2-3203-stgallen-b3xclo", // pollution St. Gallen
-        "no2-6621-genve-d5em82", // pollution Genève
-        "no2-5586-lausanne-15f02e", // pollution Lausanne
-        "ndvi-6621-genve-agregat-byj24i", // espaces verts Genève
-        "ndvi-5586-lausanne-agregat-288ezd", // espaces verts Lausanne
-        "hotspots-noise-final-avjjjy", // hotspots noise
-        "hotspots-no2-final-972i4m", // hotspots no2
-        "hotspots-green-final-72df90", // hotspots ndvi
-        "noise-5586-lausanne-15xfvd", // noise Lausanne
+        "sep-hex-a6zlrk",
+        "no2-3203-stgallen-b3xclo",
+        "no2-6621-genve-d5em82",
+        "no2-5586-lausanne-15f02e",
+        "ndvi-6621-genve-agregat-byj24i",
+        "ndvi-5586-lausanne-agregat-288ezd",
+        "hotspots-noise-final-avjjjy",
+        "hotspots-no2-final-972i4m",
+        "hotspots-green-final-72df90",
+        "noise-5586-lausanne-15xfvd",
       ];
 
       layersToHide.forEach((layerId) => {
@@ -374,6 +458,25 @@ console.log(
           },
         });
       }
+
+      // Après l'initialisation de la carte, appliquer l'état du chapitre courant
+      const currentStep = getCurrentVisibleStep();
+      const currentChapter = currentStep.chapter;
+
+      // Marquer le step courant comme actif
+      document
+        .querySelectorAll(".step")
+        .forEach((step) => step.classList.remove("active"));
+      currentStep.element.classList.add("active");
+
+      // Afficher la carte si on n'est pas sur le premier step
+      const mapElement = document.getElementById("map");
+      if (currentStep.index > 0 || currentStep.index === 0) {
+        mapElement.classList.add("active");
+      }
+
+      // Appliquer l'état du chapitre (sans animation pour éviter le mouvement brusque)
+      applyChapterState(currentChapter, true);
 
       // Initialize scrollytelling
       initializeScrollytelling();
