@@ -14,7 +14,7 @@ var config = {
   cities: {
     stgallen: [9.37698, 47.42511],
     geneva: [6.14, 46.2],
-    lausanne: [6.65, 46.6],
+    lausanne: [6.64748, 46.54927],
     switzerland: [7.4474, 46.948], // Center between cities
   },
 
@@ -22,13 +22,15 @@ var config = {
   zoomLevels: {
     mobile: {
       cityOverview: 10,
-      cityDetail: 11,
+      cityDetail: 11, // ← Actuel
+      cityDetailLausanne: 10 - 0.8, // ← Nouveau zoom spécial Lausanne
       cityZoom: 11,
       countryOverview: 7,
     },
     desktop: {
       cityOverview: 11,
-      cityDetail: 12.5,
+      cityDetail: 12.5, // ← Actuel
+      cityDetailLausanne: 11.5, // ← Nouveau zoom spécial Lausanne
       cityZoom: 12.5,
       countryOverview: 8,
     },
@@ -100,7 +102,7 @@ var config = {
       hidden: false,
       title: "Air pollution revealed",
       description:
-        "Here we see NO₂ air pollution across the city. The most polluted areas cluster around highways and major roads – cars being the primary source of this pollutant. The WHO guideline is 10 μg/m³, while Swiss law allows 30 μg/m³.",
+        "Here we see nitrogen dioxide - NO₂ - air pollution across the city. The most polluted areas cluster around highways and major roads – cars being the primary source of this pollutant. The WHO guideline is 10 μg/m³, while Swiss law allows 30 μg/m³.",
       legend: {
         image: "./charts/legend-no2.svg",
       },
@@ -190,7 +192,7 @@ var config = {
       hidden: false,
       title: "Environmental inequality exposed",
       description:
-        "The chart below shows every household in St. Gallen plotted by income level and air pollution exposure. Each dot represents a household. The pattern is clear: wealthier families breathe cleaner air, while the poorest bear the burden of pollution.",
+        "The chart below shows every household in St. Gallen plotted by socioeconomic status and air pollution exposure. Each dot represents a household. The pattern is clear: wealthier families breathe cleaner air, while the poorest bear the burden of pollution.",
       chart: {
         getImage: function () {
           return config.getChartImage("stgallen-no2-scatter");
@@ -247,7 +249,7 @@ var config = {
       hidden: false,
       title: "Switzerland's biggest gap",
       description:
-        'Here we see the stark divide: <span style="background: #ff8c00; color: white; padding: 0 0.3em; border-radius: 0.3em;">orange&nbsp;clusters</span> show wealthy households breathing clean air, while <span style="background: #d32f2f; color: white; padding: 0 0.3em; border-radius: 0.3em;">red&nbsp;areas</span> reveal poor families trapped in pollution.<br><br>St. Gallen has the largest inequality gap among Swiss cities. <strong>Only 14% of wealthy households face pollution above 15 μg/m³, compared to 63% of the poorest families.</strong>',
+        'Here we see the stark divide: <span style="background: #ff8c00; color: white; padding: 0 0.3em; border-radius: 0.3em;">orange&nbsp;clusters show wealthy households breathing clean air</span> , while <span style="background: #d32f2f; color: white; padding: 0 0.3em; border-radius: 0.3em;">red&nbsp;areas reveal poor families trapped in pollution</span>.<br><br>St. Gallen has the largest inequality gap among Swiss cities. <strong>Only 14% of wealthy households face pollution above 15 μg/m³, compared to 63% of the poorest families.</strong>',
       getLocation: function () {
         return config.getLocation(config.cities.stgallen, "cityZoom", 20, 15);
       },
@@ -273,7 +275,7 @@ var config = {
       onChapterExit: [
         {
           layer: "cities-7uq93l",
-          opacity: 0,
+          opacity: 0.4,
           duration: 500,
         },
         {
@@ -308,7 +310,7 @@ var config = {
         {
           layer: "cities-7uq93l",
           opacity: 1,
-          duration: 4000,
+          duration: 2000,
         },
       ],
       onChapterExit: [
@@ -439,12 +441,12 @@ var config = {
         },
         {
           layer: "sep-hex-a6zlrk",
-          opacity: 0,
+          opacity: 0.4,
           duration: 1000,
         },
         {
           layer: "hotspots-no2-final-972i4m",
-          opacity: 0.8,
+          opacity: 0,
           duration: 4000,
         },
       ],
@@ -517,7 +519,7 @@ var config = {
       hidden: false,
       title: "The privilege of green",
       description:
-        "This chart reveals spatial segregation in action. While vegetation is scarce citywide, wealthy households consistently access greener environments than their less affluent neighbors. Nature becomes a luxury good.",
+        'This chart reveals spatial segregation in action. While vegetation is scarce citywide, <span style="background: #006600; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;households</span> consistently access greener environments than their <span style="background: #663399; color: white; padding: 0 0.3em; border-radius: 0.3em;">less&nbsp;affluent&nbsp;neighbors</span>. Nature becomes a luxury good.',
       chart: {
         getImage: function () {
           return config.getChartImage("geneva-green-scatter");
@@ -548,7 +550,7 @@ var config = {
       onChapterExit: [
         {
           layer: "cities-7uq93l",
-          opacity: 0,
+          opacity: 1,
           duration: 500,
         },
         {
@@ -569,7 +571,7 @@ var config = {
       hidden: false,
       title: "The Geneva paradox",
       description:
-        "The final picture is striking: 95% of the poorest households have limited access to green environments, compared to 72% of the wealthiest. In Geneva, density equalizes pollution exposure, but creates stark inequality in access to nature.",
+        'The geography tells the story: <span style="background: #ff8c00; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;clusters with abundant vegetation access</span> spread across the city\'s periphery, while <span style="background: #d32f2f; color: white; padding: 0 0.3em; border-radius: 0.3em;">poor&nbsp;clusters with limited green space</span> concentrate in the dense urban center.<br><br>The final picture is striking: <strong>95% of the poorest households have limited access to green environments, compared to 72% of the wealthiest</strong>. In Geneva, density equalizes pollution exposure, but creates stark inequality in access to nature.',
       getLocation: function () {
         return config.getLocation(config.cities.geneva, "cityDetail", 45, 0);
       },
@@ -583,24 +585,24 @@ var config = {
         },
         {
           layer: "sep-hex-a6zlrk",
-          opacity: 0.8,
+          opacity: 0.2,
           duration: 1000,
         },
         {
           layer: "ndvi-6621-genve-agregat-byj24i",
-          opacity: 0.4,
+          opacity: 0.2,
           duration: 1000,
         },
         {
           layer: "hotspots-green-final-72df90",
-          opacity: 0.9,
+          opacity: 0.8,
           duration: 2000,
         },
       ],
       onChapterExit: [
         {
           layer: "cities-7uq93l",
-          opacity: 0,
+          opacity: 0.4,
           duration: 500,
         },
         {
@@ -626,12 +628,12 @@ var config = {
     //
 
     {
-      id: "transition-lausanne",
+      id: "lausanne-overview",
       alignment: "right",
       hidden: false,
-      title: "Lausanne, dernière étape",
+      title: "Lausanne, final destination",
       description:
-        "Lausanne, dernière étape. 140'000 habitants sur les collines du Léman.",
+        "Lausanne, our final stop. With 140,000 inhabitants, this hillside city also sits on Lake Geneva's shores. Here, we'll discover how geography shapes environmental justice.",
       getLocation: function () {
         return config.getLocation(
           config.cities.lausanne,
@@ -641,15 +643,107 @@ var config = {
         );
       },
       mapAnimation: "flyTo",
+      rotateAnimation: true,
+      onChapterEnter: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 1000,
+        },
+      ],
+      onChapterExit: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 0,
+          duration: 500,
+        },
+      ],
+    },
+    {
+      id: "lausanne-noise",
+      alignment: "right",
+      hidden: false,
+      title: "The sound of traffic",
+      description:
+        "This layer shows daytime road noise across Lausanne. Like air pollution, this nuisance comes from traffic and peaks along major roadways. The WHO recommends a daytime limit of 53 dB.",
+      legend: {
+        image: "./charts/legend-noise.svg",
+      },
+      getLocation: function () {
+        return config.getLocation(config.cities.lausanne, "cityDetail", 30, 0);
+      },
+      mapAnimation: "flyTo",
       rotateAnimation: false,
       onChapterEnter: [
         {
-          layer: "ndvi-6621-genve-agregat-byj24i",
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 500,
+        },
+        {
+          layer: "noise-5586-lausanne-15xfvd",
+          opacity: 1,
+          duration: 2000,
+        },
+      ],
+      onChapterExit: [
+        {
+          layer: "cities-7uq93l",
           opacity: 0,
           duration: 500,
         },
         {
-          layer: "no2-6621-genve-d5em82",
+          layer: "noise-5586-lausanne-15xfvd",
+          opacity: 0,
+          duration: 500,
+        },
+      ],
+    },
+    {
+      id: "lausanne-noise-inequality",
+      alignment: "right",
+      hidden: false,
+      title: "Unequal exposure to noise",
+      description:
+        'Like in St. Gallen, <span style="background: #006600; color: white; padding: 0 0.3em; border-radius: 0.3em;">privileged&nbsp;households</span> enjoy quieter environments while <span style="background: #663399; color: white; padding: 0 0.3em; border-radius: 0.3em;">disadvantaged&nbsp;families</span> bear the burden of noise pollution in Lausanne.',
+      chart: {
+        title: "Noise exposure by household income",
+        subtitle: "Sound levels across income groups in Lausanne",
+        getImage: function () {
+          return config.getChartImage("lausanne-noise-scatter");
+        },
+        source: "Source: Federal Office for the Environment",
+      },
+      getLocation: function () {
+        return config.getLocation(config.cities.lausanne, "cityDetail", 25, 0);
+      },
+      mapAnimation: "flyTo",
+      rotateAnimation: false,
+      onChapterEnter: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 500,
+        },
+        {
+          layer: "noise-5586-lausanne-15xfvd",
+          opacity: 1,
+          duration: 1000,
+        },
+        {
+          layer: "sep-hex-a6zlrk",
+          opacity: 1,
+          duration: 1000,
+        },
+      ],
+      onChapterExit: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 0,
+          duration: 500,
+        },
+        {
+          layer: "noise-5586-lausanne-15xfvd",
           opacity: 0,
           duration: 500,
         },
@@ -659,28 +753,81 @@ var config = {
           duration: 500,
         },
       ],
-      onChapterExit: [
+    },
+    {
+      id: "lausanne-noise-hotspots",
+      alignment: "right",
+      hidden: false,
+      title: "Geography of noise inequality",
+      description:
+        'The divide is clear: <span style="background: #ff8c00; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;households</span> cluster in the quiet east and north, while <span style="background: #d32f2f; color: white; padding: 0 0.3em; border-radius: 0.3em;">poor&nbsp;families</span> concentrate in the noisy center and west.<br><br>In Lausanne, <strong>55% of the poorest households face noise above 50 dB, compared to just 28% of the wealthiest.</strong>',
+      chart: {
+        title: "Noise exposure by household income",
+        subtitle: "Sound levels across income groups in Lausanne",
+        getImage: function () {
+          return config.getChartImage("lausanne-noise-scatter");
+        },
+        source: "Source: Federal Office for the Environment",
+      },
+      getLocation: function () {
+        return config.getLocation(config.cities.lausanne, "cityZoom", 30, 15);
+      },
+      mapAnimation: "flyTo",
+      rotateAnimation: false,
+      onChapterEnter: [
         {
           layer: "cities-7uq93l",
           opacity: 1,
+          duration: 500,
+        },
+        {
+          layer: "noise-5586-lausanne-15xfvd",
+          opacity: 0.2,
           duration: 1000,
+        },
+        {
+          layer: "sep-hex-a6zlrk",
+          opacity: 0.2,
+          duration: 1000,
+        },
+        {
+          layer: "hotspots-noise-final-avjjjy",
+          opacity: 0.8,
+          duration: 2000,
+        },
+      ],
+      onChapterExit: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 0,
+          duration: 500,
+        },
+        {
+          layer: "noise-5586-lausanne-15xfvd",
+          opacity: 0,
+          duration: 500,
+        },
+        {
+          layer: "sep-hex-a6zlrk",
+          opacity: 0,
+          duration: 500,
+        },
+        {
+          layer: "hotspots-noise-final-avjjjy",
+          opacity: 0,
+          duration: 500,
         },
       ],
     },
     {
-      id: "lausanne-double-penalty",
+      id: "lausanne-nature-privilege",
       alignment: "right",
       hidden: false,
-      title: "La double peine",
+      title: "Nature as privilege",
       description:
-        "Ici se cumulent tous les désavantages : pollution ET manque d'espaces verts touchent les mêmes quartiers.",
-      chart: {
-        title: "Cumul des inégalités à Lausanne",
-        subtitle: "Pollution, espaces verts et statut social",
-        getImage: function () {
-          return config.getChartImage("lausanne-green-scatter");
-        },
-        source: "Source: Offices fédéraux",
+        "Access to nature isn't equally distributed either. Here we see vegetation intensity – sparse in the center, abundant in the east, and richest in the forested north. Green space follows wealth.",
+      legend: {
+        image: "./charts/legend-ndvi.svg",
       },
       getLocation: function () {
         return config.getLocation(config.cities.lausanne, "cityDetail", 30, 0);
@@ -689,40 +836,101 @@ var config = {
       rotateAnimation: false,
       onChapterEnter: [
         {
-          layer: "no2-5586-lausanne-15f02e",
-          opacity: 0.4,
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 500,
+        },
+        {
+          layer: "sep-hex-a6zlrk",
+          opacity: 0.8,
+          duration: 1000,
+        },
+        {
+          layer: "ndvi-5586-lausanne-agregat-288ezd",
+          opacity: 0.8,
+          duration: 2000,
+        },
+      ],
+      onChapterExit: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 0,
+          duration: 500,
+        },
+        {
+          layer: "sep-hex-a6zlrk",
+          opacity: 0,
+          duration: 500,
+        },
+        {
+          layer: "ndvi-5586-lausanne-agregat-288ezd",
+          opacity: 0,
+          duration: 500,
+        },
+      ],
+    },
+    {
+      id: "lausanne-green-concentration",
+      alignment: "right",
+      hidden: false,
+      title: "Concentrated green inequality",
+      description:
+        'The numbers tell a stark story: while 72% of <span style="background: #006600; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;households</span> have limited green space nearby, this rises to 95% for the <span style="background: #663399; color: white; padding: 0 0.3em; border-radius: 0.3em;">poorest&nbsp;families</span>. Nature becomes another marker of privilege.',
+      chart: {
+        title: "Green space access by household income",
+        subtitle: "Vegetation levels across income groups in Lausanne",
+        getImage: function () {
+          return config.getChartImage("lausanne-green-scatter");
+        },
+        source: "Source: Federal Office for Statistics",
+      },
+      getLocation: function () {
+        return config.getLocation(config.cities.lausanne, "cityZoom", 20, 15);
+      },
+      mapAnimation: "flyTo",
+      rotateAnimation: false,
+      onChapterEnter: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 500,
+        },
+        {
+          layer: "hotspots-green-final-72df90",
+          opacity: 0.8,
           duration: 2000,
         },
         {
           layer: "ndvi-5586-lausanne-agregat-288ezd",
           opacity: 0.4,
-          duration: 2000,
+          duration: 1000,
         },
       ],
-      onChapterExit: [],
+      onChapterExit: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 0,
+          duration: 500,
+        },
+        {
+          layer: "hotspots-green-final-72df90",
+          opacity: 0,
+          duration: 500,
+        },
+        {
+          layer: "ndvi-5586-lausanne-agregat-288ezd",
+          opacity: 0,
+          duration: 500,
+        },
+      ],
     },
     {
-      id: "lausanne-geography",
-      alignment: "right",
+      id: "conclusion-overview",
+      alignment: "fully",
       hidden: false,
-      title: "La géographie de l'inégalité",
+      title: "Three cities, one pattern",
       description:
-        "Les quartiers en pente, moins accessibles, concentrent précarité et nuisances. Un exemple de gentrification environnementale.",
-      getLocation: function () {
-        return config.getLocation(config.cities.lausanne, "cityZoom", 60, 180);
-      },
-      mapAnimation: "flyTo",
-      rotateAnimation: false,
-      onChapterEnter: [],
-      onChapterExit: [],
-    },
-    {
-      id: "conclusion",
-      alignment: "right",
-      hidden: false,
-      title: "Trois villes, une réalité",
-      description:
-        "Trois villes, trois histoires d'inégalités. Mais partout, l'adresse détermine la qualité de l'air qu'on respire.",
+        "Three cities, three environmental indicators, one universal truth: <strong>where you live determines what you breathe, hear, and see.</strong><br><br>Across Switzerland's urban landscape, environmental quality follows the same troubling geography – one shaped by income, not justice.",
       getLocation: function () {
         return config.getLocation(
           config.cities.switzerland,
@@ -735,32 +943,18 @@ var config = {
       rotateAnimation: false,
       onChapterEnter: [
         {
-          layer: "no2-5586-lausanne-15f02e",
-          opacity: 0,
-          duration: 3000,
-        },
-        {
-          layer: "no2-6621-genve-d5em82",
-          opacity: 0,
-          duration: 3000,
-        },
-        {
-          layer: "no2-3203-stgallen-b3xclo",
-          opacity: 0,
-          duration: 3000,
-        },
-        {
-          layer: "ndvi-6621-genve-agregat-byj24i",
-          opacity: 0,
-          duration: 3000,
-        },
-        {
-          layer: "ndvi-5586-lausanne-agregat-288ezd",
-          opacity: 0,
-          duration: 3000,
+          layer: "cities-7uq93l",
+          opacity: 1,
+          duration: 2000,
         },
       ],
-      onChapterExit: [],
-    },
-  ],
+      onChapterExit: [
+        {
+          layer: "cities-7uq93l",
+          opacity: 0,
+          duration: 500,
+        },
+      ],
+    }, // ← AJOUTEZ CETTE VIRGULE
+  ], // ← Fermeture du tableau chapters
 };

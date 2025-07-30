@@ -340,6 +340,7 @@ console.log(
         "hotspots-noise-final-avjjjy", // hotspots noise
         "hotspots-no2-final-972i4m", // hotspots no2
         "hotspots-green-final-72df90", // hotspots ndvi
+        "noise-5586-lausanne-15xfvd", // noise Lausanne
       ];
 
       layersToHide.forEach((layerId) => {
