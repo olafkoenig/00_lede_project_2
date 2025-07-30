@@ -434,7 +434,7 @@ sf_grouped <- read_sf("data_input/data_edit/cities_reclassified.gpkg")
 
 ## Making scatterplot template
 
-#### Helper: descritptive statistics to adjust axes
+#### Helper: descriptive statistics to adjust axes
 
 ```{r}
 
@@ -708,17 +708,31 @@ sf_grouped %>% filter(bfs_nummer == 6621) %>%
   dw_data_to_chart("qRJ8l")
 
 
-# List
+# -------------- NOISE --------------
+------------------------------------
+  Lausanne
+"https://app.datawrapper.de/edit/MJu0Z/visualize#refine"
+
+sf_grouped %>% filter(bfs_nummer == 5586) %>% 
+  select("ssep3", "noise", "ssep_noise_label") %>% 
+  dw_data_to_chart("MJu0Z")
+
+
+
+# -------------- List for export --------------
+------------------------------------
 scatterplots_scrolly_ids <- c(
   "rffGE",
   "8ZPgH",
   "iPCow",
   "HfB0J",
-  "qRJ8l"
+  "qRJ8l",
+  "MJu0Z"
 )
 
-# Export PNGs
-export_dw_charts(scatterplots_scrolly_ids)
+# # Export PNGs
+# export_dw_charts(scatterplots_scrolly_ids)
+
 ```
 
 ### HTML Small multiple panel creation

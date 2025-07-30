@@ -86,9 +86,9 @@ tibble(
 
 -   Forte amélioration du modèle spatial : AIC passe de 13658 → 13109 (diff. = 549)
 
--    Coefficient SES change significativement : -0.172 → -0.100 (différence de 42% !)
+-   Coefficient SES change significativement : -0.172 → -0.100 (différence de 42% !)
 
--    Rho = 0.68 : très forte autocorrélation spatiale positive
+-   Rho = 0.68 : très forte autocorrélation spatiale positive
 
 ## Data sampling
 
@@ -172,11 +172,11 @@ print(zurich_summary)
 ```
 
 | Observations clés :
-| 1. Noise : Résultat cohérent avec ton échantillon précédent Coefficient linéaire : -0.187 → spatial : +14.996 Inversion complète du signe ! Le modèle spatial révèle que l'effet SES brut était complètement biaisé Rho = 0.79 (très forte autocorrélation) 
+| 1. Noise : Résultat cohérent avec ton échantillon précédent Coefficient linéaire : -0.187 → spatial : +14.996 Inversion complète du signe ! Le modèle spatial révèle que l'effet SES brut était complètement biaisé Rho = 0.79 (très forte autocorrélation)
 | 
-| 2. NO2 : Inversion encore plus dramatique Coefficient linéaire : -0.050 → spatial : +3.062 Le modèle linéaire suggérait que les riches sont moins exposés au NO2, le modèle spatial dit l'inverse ! Rho = 0.89 (autocorrélation massive) 
+| 2. NO2 : Inversion encore plus dramatique Coefficient linéaire : -0.050 → spatial : +3.062 Le modèle linéaire suggérait que les riches sont moins exposés au NO2, le modèle spatial dit l'inverse ! Rho = 0.89 (autocorrélation massive)
 | 
-| 3. NDVI : Inversion aussi Coefficient linéaire : -0.003 → spatial : +0.008 Rho = 0.99 (autocorrélation quasi-parfaite pour la végétation) 
+| 3. NDVI : Inversion aussi Coefficient linéaire : -0.003 → spatial : +0.008 Rho = 0.99 (autocorrélation quasi-parfaite pour la végétation)
 | 
 | À Zurich, une fois contrôlé pour les effets de voisinage spatial, les zones à plus haut SES sont en fait PLUS exposées aux nuisances environnementales ! Cela pourrait s'expliquer par : Quartiers aisés en centre-ville (plus pollués) Quartiers populaires en périphérie (plus verts, moins bruyants) C'est un résultat majeur ! Il faut absolument voir si c'est similaire dans les autres villes.
 
