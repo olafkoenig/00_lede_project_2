@@ -140,7 +140,7 @@ var config = {
       hidden: false,
       title: "The social map",
       description:
-        "Now let's see how the population is distributed across the city by socioeconomic status. The poorest households cluster near major roads and the city center, while wealthier residents live further away – enjoying cleaner air.",
+        'Now let\'s see how the population is distributed across the city by socioeconomic status. The <span style="background: #663399; color: white; padding: 0 0.3em; border-radius: 0.3em;">poorest&nbsp;households</span> cluster near major roads and the city center, while <span style="background: #006600; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthier&nbsp;residents</span> live further away – enjoying cleaner air.',
       legend: {
         image: "./charts/legend-ses.svg",
       },
@@ -247,7 +247,7 @@ var config = {
       hidden: false,
       title: "Switzerland's biggest gap",
       description:
-        "Here we see the stark divide: orange clusters show wealthy households breathing clean air, while red areas reveal poor families trapped in pollution. St. Gallen has the largest inequality gap among Swiss cities. Only 14% of wealthy households face pollution above 15 μg/m³, compared to 63% of the poorest families.",
+        'Here we see the stark divide: <span style="background: #ff8c00; color: white; padding: 0 0.3em; border-radius: 0.3em;">orange&nbsp;clusters</span> show wealthy households breathing clean air, while <span style="background: #d32f2f; color: white; padding: 0 0.3em; border-radius: 0.3em;">red&nbsp;areas</span> reveal poor families trapped in pollution.<br><br>St. Gallen has the largest inequality gap among Swiss cities. <strong>Only 14% of wealthy households face pollution above 15 μg/m³, compared to 63% of the poorest families.</strong>',
       getLocation: function () {
         return config.getLocation(config.cities.stgallen, "cityZoom", 20, 15);
       },
@@ -415,7 +415,7 @@ var config = {
       hidden: false,
       title: "Pollution without privilege",
       description:
-        'The scatter plot reveals Geneva\'s unique pattern: an "egalitarian" exposure to pollution where rich and poor households breathe similarly polluted air. Urban density has leveled the playing field – at least for air quality.',
+        'The scatter plot reveals Geneva\'s unique pattern: an almost "egalitarian" exposure to pollution where rich and poor households breathe similarly polluted air. Urban density has leveled the playing field – at least for air quality.',
       chart: {
         getImage: function () {
           return config.getChartImage("geneva-no2-scatter");
