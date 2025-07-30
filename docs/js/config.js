@@ -15,7 +15,7 @@ var config = {
     stgallen: [9.37698, 47.42511],
     geneva: [6.14, 46.2],
     lausanne: [6.64748, 46.54927],
-    switzerland: [7.4474, 46.948], // Center between cities
+    switzerland: [8.37352, 46.89788], // Center
   },
 
   // Responsive zoom levels
@@ -23,14 +23,14 @@ var config = {
     mobile: {
       cityOverview: 10,
       cityDetail: 11, // ← Actuel
-      cityDetailLausanne: 10 - 0.8, // ← Nouveau zoom spécial Lausanne
+      cityDetailLausanne: 10 - 1, // ← Nouveau zoom spécial Lausanne
       cityZoom: 11,
       countryOverview: 7,
     },
     desktop: {
       cityOverview: 11,
       cityDetail: 12.5, // ← Actuel
-      cityDetailLausanne: 11.5, // ← Nouveau zoom spécial Lausanne
+      cityDetailLausanne: 11.5 - 1.2, // ← Nouveau zoom spécial Lausanne
       cityZoom: 12.5,
       countryOverview: 8,
     },
@@ -102,7 +102,7 @@ var config = {
       hidden: false,
       title: "Air pollution revealed",
       description:
-        "Here we see nitrogen dioxide - NO₂ - air pollution across the city. The most polluted areas cluster around highways and major roads – cars being the primary source of this pollutant. The WHO guideline is 10 μg/m³, while Swiss law allows 30 μg/m³.",
+        "Here we see nitrogen dioxide - NO₂ - air pollution across the city. The most polluted areas cluster around highways and major roads – cars being the primary source of this pollutant. The World Health Organization guideline is 10 μg/m³, while Swiss law allows 30 μg/m³.",
       legend: {
         image: "./charts/legend-no2.svg",
       },
@@ -479,7 +479,7 @@ var config = {
       hidden: false,
       title: "Concrete center, green periphery",
       description:
-        "Now let's examine vegetation density across the city. The hyper-dense city center leaves little room for greenery, while nature flourishes on the outskirts. In Geneva, green space is a geography of distance.",
+        "Now let's examine vegetation intensity across the city. The hyper-dense city center leaves little room for greenery, while nature flourishes on the outskirts. In Geneva, green space is a geography of distance.",
       legend: {
         image: "./charts/legend-ndvi.svg",
       },
@@ -560,7 +560,7 @@ var config = {
         },
         {
           layer: "ndvi-6621-genve-agregat-byj24i",
-          opacity: 0,
+          opacity: 0.4,
           duration: 500,
         },
       ],
@@ -571,7 +571,7 @@ var config = {
       hidden: false,
       title: "The Geneva paradox",
       description:
-        'The geography tells the story: <span style="background: #ff8c00; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;clusters with abundant vegetation access</span> spread across the city\'s periphery, while <span style="background: #d32f2f; color: white; padding: 0 0.3em; border-radius: 0.3em;">poor&nbsp;clusters with limited green space</span> concentrate in the dense urban center.<br><br>The final picture is striking: <strong>95% of the poorest households have limited access to green environments, compared to 72% of the wealthiest</strong>. In Geneva, density equalizes pollution exposure, but creates stark inequality in access to nature.',
+        'The geography tells the story: <span style="background: #ff8c00; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;clusters with abundant vegetation access</span> spread across the city\'s periphery, while <span style="background: #d32f2f; color: white; padding: 0 0.3em; border-radius: 0.3em;">poor&nbsp;clusters with limited green space</span> concentrate in the dense urban center.<br><br>The final picture is striking: <strong>95% of the poorest households have limited access to green environments, compared to 72% of the wealthiest</strong>.<br><br>In Geneva, density equalizes pollution exposure, but creates stark inequality in access to nature.',
       getLocation: function () {
         return config.getLocation(config.cities.geneva, "cityDetail", 45, 0);
       },
@@ -585,12 +585,12 @@ var config = {
         },
         {
           layer: "sep-hex-a6zlrk",
-          opacity: 0.2,
+          opacity: 0,
           duration: 1000,
         },
         {
           layer: "ndvi-6621-genve-agregat-byj24i",
-          opacity: 0.2,
+          opacity: 0.4,
           duration: 1000,
         },
         {
@@ -665,7 +665,7 @@ var config = {
       hidden: false,
       title: "The sound of traffic",
       description:
-        "This layer shows daytime road noise across Lausanne. Like air pollution, this nuisance comes from traffic and peaks along major roadways. The WHO recommends a daytime limit of 53 dB.",
+        "This layer shows daytime road noise across Lausanne. Like air pollution, this nuisance comes from traffic and peaks along major roadways. The World Health Organization recommends a <strong>daytime limit of 53 dB</strong>.",
       legend: {
         image: "./charts/legend-noise.svg",
       },
@@ -689,12 +689,12 @@ var config = {
       onChapterExit: [
         {
           layer: "cities-7uq93l",
-          opacity: 0,
+          opacity: 1,
           duration: 500,
         },
         {
           layer: "noise-5586-lausanne-15xfvd",
-          opacity: 0,
+          opacity: 0.8,
           duration: 500,
         },
       ],
@@ -707,12 +707,9 @@ var config = {
       description:
         'Like in St. Gallen, <span style="background: #006600; color: white; padding: 0 0.3em; border-radius: 0.3em;">privileged&nbsp;households</span> enjoy quieter environments while <span style="background: #663399; color: white; padding: 0 0.3em; border-radius: 0.3em;">disadvantaged&nbsp;families</span> bear the burden of noise pollution in Lausanne.',
       chart: {
-        title: "Noise exposure by household income",
-        subtitle: "Sound levels across income groups in Lausanne",
         getImage: function () {
           return config.getChartImage("lausanne-noise-scatter");
         },
-        source: "Source: Federal Office for the Environment",
       },
       getLocation: function () {
         return config.getLocation(config.cities.lausanne, "cityDetail", 25, 0);
@@ -726,25 +723,25 @@ var config = {
           duration: 500,
         },
         {
-          layer: "noise-5586-lausanne-15xfvd",
+          layer: "sep-hex-a6zlrk",
           opacity: 1,
           duration: 1000,
         },
         {
-          layer: "sep-hex-a6zlrk",
-          opacity: 1,
+          layer: "noise-5586-lausanne-15xfvd",
+          opacity: 0.4,
           duration: 1000,
         },
       ],
       onChapterExit: [
         {
           layer: "cities-7uq93l",
-          opacity: 0,
+          opacity: 1,
           duration: 500,
         },
         {
           layer: "noise-5586-lausanne-15xfvd",
-          opacity: 0,
+          opacity: 0.4,
           duration: 500,
         },
         {
@@ -760,14 +757,11 @@ var config = {
       hidden: false,
       title: "Geography of noise inequality",
       description:
-        'The divide is clear: <span style="background: #ff8c00; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;households</span> cluster in the quiet east and north, while <span style="background: #d32f2f; color: white; padding: 0 0.3em; border-radius: 0.3em;">poor&nbsp;families</span> concentrate in the noisy center and west.<br><br>In Lausanne, <strong>55% of the poorest households face noise above 50 dB, compared to just 28% of the wealthiest.</strong>',
+        'The divide is clear: <span style="background: #ff8c00; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;households cluster in the quiet east and north</span>, while <span style="background: #d32f2f; color: white; padding: 0 0.3em; border-radius: 0.3em;">poor&nbsp;families concentrate in the noisy center and west</span>.<br><br>In Lausanne, <strong>55% of the poorest households face noise above 50 dB, compared to just 28% of the wealthiest.</strong>',
       chart: {
-        title: "Noise exposure by household income",
-        subtitle: "Sound levels across income groups in Lausanne",
         getImage: function () {
           return config.getChartImage("lausanne-noise-scatter");
         },
-        source: "Source: Federal Office for the Environment",
       },
       getLocation: function () {
         return config.getLocation(config.cities.lausanne, "cityZoom", 30, 15);
@@ -799,7 +793,7 @@ var config = {
       onChapterExit: [
         {
           layer: "cities-7uq93l",
-          opacity: 0,
+          opacity: 1,
           duration: 500,
         },
         {
@@ -854,7 +848,7 @@ var config = {
       onChapterExit: [
         {
           layer: "cities-7uq93l",
-          opacity: 0,
+          opacity: 1,
           duration: 500,
         },
         {
@@ -864,7 +858,7 @@ var config = {
         },
         {
           layer: "ndvi-5586-lausanne-agregat-288ezd",
-          opacity: 0,
+          opacity: 0.4,
           duration: 500,
         },
       ],
@@ -875,14 +869,11 @@ var config = {
       hidden: false,
       title: "Concentrated green inequality",
       description:
-        'The numbers tell a stark story: while 72% of <span style="background: #006600; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;households</span> have limited green space nearby, this rises to 95% for the <span style="background: #663399; color: white; padding: 0 0.3em; border-radius: 0.3em;">poorest&nbsp;families</span>. Nature becomes another marker of privilege.',
+        'The pattern mirrors the noise distribution: <span style="background: #ff8c00; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;green&nbsp;clusters</span> flourish in the leafy periphery of east and north Lausanne, while <span style="background: #d32f2f; color: white; padding: 0 0.3em; border-radius: 0.3em;">poor&nbsp;concrete&nbsp;clusters</span> are trapped in the dense city center.<br><br>The numbers tell a stark story: <strong>while 72% of wealthy households have limited green space nearby, this rises to 95% for the poorest families. Nature becomes another marker of privilege.</strong>',
       chart: {
-        title: "Green space access by household income",
-        subtitle: "Vegetation levels across income groups in Lausanne",
         getImage: function () {
           return config.getChartImage("lausanne-green-scatter");
         },
-        source: "Source: Federal Office for Statistics",
       },
       getLocation: function () {
         return config.getLocation(config.cities.lausanne, "cityZoom", 20, 15);
@@ -909,7 +900,7 @@ var config = {
       onChapterExit: [
         {
           layer: "cities-7uq93l",
-          opacity: 0,
+          opacity: 1,
           duration: 500,
         },
         {
@@ -951,10 +942,10 @@ var config = {
       onChapterExit: [
         {
           layer: "cities-7uq93l",
-          opacity: 0,
+          opacity: 1,
           duration: 500,
         },
       ],
-    }, // ← AJOUTEZ CETTE VIRGULE
-  ], // ← Fermeture du tableau chapters
+    },
+  ],
 };
