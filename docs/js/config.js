@@ -219,11 +219,6 @@ var config = {
           opacity: 0.4,
           duration: 1000,
         },
-        {
-          layer: "hotspots-no2-final-972i4m",
-          opacity: 0.8,
-          duration: 4000,
-        },
       ],
       onChapterExit: [
         {
@@ -233,7 +228,7 @@ var config = {
         },
         {
           layer: "sep-hex-a6zlrk",
-          opacity: 0,
+          opacity: 0.4,
           duration: 500,
         },
         {
@@ -941,7 +936,7 @@ var config = {
       hidden: false,
       title: "Three cities, one pattern",
       description:
-        "Whether it’s air, noise, or greenery, the same story repeats: in Swiss cities, the environmental quality mirrors social inequality.<br><br>Let’s look at this pattern across Switzerland’s 10 largest cities.",
+        "Whether it’s air, noise, or greenery, the same story repeats: in Swiss cities, the environmental quality mirrors social inequality.",
       getLocation: function () {
         return config.getLocation(
           config.cities.switzerland,
