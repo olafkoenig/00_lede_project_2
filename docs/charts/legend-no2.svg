@@ -5,13 +5,13 @@
   </text>
   
   <!-- Carrés de couleur qui se touchent -->
-  <rect x="20" y="35" width="40" height="20" fill="hsl(19, 95%, 92%)" stroke="none"/>
-  <rect x="60" y="35" width="40" height="20" fill="hsl(17, 94%, 81%)" stroke="none"/>
-  <rect x="100" y="35" width="40" height="20" fill="hsl(14, 96%, 72%)" stroke="none"/>
-  <rect x="140" y="35" width="40" height="20" fill="hsl(11, 96%, 64%)" stroke="none"/>
-  <rect x="180" y="35" width="40" height="20" fill="hsl(5, 86%, 55%)" stroke="none"/>
-  <rect x="220" y="35" width="40" height="20" fill="hsl(358, 79%, 45%)" stroke="none"/>
-  <rect x="260" y="35" width="40" height="20" fill="hsl(355, 100%, 30%)" stroke="none"/>
+  <rect x="20" y="35" width="40" height="20" fill="#fee3d7ff" stroke="none"/>
+  <rect x="60" y="35" width="40" height="20" fill="#fcbba1ff" stroke="none"/>
+  <rect x="100" y="35" width="40" height="20" fill="#fc9373ff" stroke="none"/>
+  <rect x="140" y="35" width="40" height="20" fill="#fb6b4bff" stroke="none"/>
+  <rect x="180" y="35" width="40" height="20" fill="#ef3a2aff" stroke="none"/>
+  <rect x="220" y="35" width="40" height="20" fill="#cd181eff" stroke="none"/>
+  <rect x="260" y="35" width="40" height="20" fill="#99000dff" stroke="none"/>
   
   <!-- Labels aux limites entre classes -->
   <text x="20" y="70" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="#666">0</text>
