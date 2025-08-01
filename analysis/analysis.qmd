@@ -195,7 +195,7 @@ ggplot(df_long, aes(x = value)) +
 
 ```
 
-## Choosing indicators (national)
+## Test indicators (national)
 
 ```{r}
 
@@ -216,6 +216,23 @@ summary <- df %>%
   )
 print(summary)
 
+```
+
+## Choosing indicators (national)
+
+```{r}
+
+df %>% 
+  mutate(
+    ssep3_global_quartiles = ntile(ssep3, 4)
+  ) %>% 
+group_by(ssep3_global_quartiles) %>% 
+  summarise(
+      # n = n(),
+      pct_above_50_noise = mean(noise > 50) * 100,
+      pct_above_15_no2   = mean(no2 > 15) * 100,
+      .groups = "drop"
+    ) 
 ```
 
 ```{r}
