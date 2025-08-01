@@ -142,7 +142,7 @@ var config = {
       hidden: false,
       title: "The social map",
       description:
-        'Now let\'s see how the population is distributed across the city by socioeconomic status. The <span style="background: #663399; color: white; padding: 0 0.3em; border-radius: 0.3em;">poorest&nbsp;households</span> cluster near major roads and the city center, while <span style="background: #006600; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthier&nbsp;residents</span> live further away – enjoying cleaner air.',
+        'Now let\'s see how the population is distributed across the city by socioeconomic status. The <span style="background: #d73027; color: white; padding: 0 0.3em; border-radius: 0.3em;">poorest&nbsp;households</span> cluster near major roads and the city center, while <span style="background: #4575b4; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthier&nbsp;residents</span> live further away – enjoying cleaner air.',
       legend: {
         image: "./charts/legend-ses.svg",
       },
@@ -244,7 +244,7 @@ var config = {
       hidden: false,
       title: "Switzerland's biggest gap",
       description:
-        'Here we see the stark divide: <span style="background: #ff8c00; color: white; padding: 0 0.3em; border-radius: 0.3em;">orange&nbsp;clusters show wealthy households breathing clean air</span> , while <span style="background: #d32f2f; color: white; padding: 0 0.3em; border-radius: 0.3em;">red&nbsp;areas reveal poor families trapped in pollution</span>.<br><br>St. Gallen has the largest inequality gap among Swiss cities. <strong>Only 14% of wealthy households face pollution above 15 μg/m³, compared to 63% of the poorest families.</strong>',
+        'Here we see the stark divide: <span style="background: #313695; color: white; padding: 0 0.3em; border-radius: 0.3em;">orange&nbsp;clusters show wealthy households breathing clean air</span> , while <span style="background: #a50026; color: white; padding: 0 0.3em; border-radius: 0.3em;">red&nbsp;areas reveal poor families trapped in pollution</span>.<br><br>St. Gallen has the largest inequality gap among Swiss cities. <strong>Only 14% of wealthy households face pollution above 15 μg/m³, compared to 63% of the poorest families.</strong>',
       getLocation: function () {
         return config.getLocation(config.cities.stgallen, "cityZoom", 20, 15);
       },
@@ -566,7 +566,7 @@ var config = {
       hidden: false,
       title: "The Geneva paradox",
       description:
-        'The geography tells the story: <span style="background: #ff8c00; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;clusters with abundant vegetation access</span> spread across the city\'s periphery, while <span style="background: #d32f2f; color: white; padding: 0 0.3em; border-radius: 0.3em;">poor&nbsp;clusters with limited green space</span> concentrate in the dense urban center.<br><br>The final picture is striking: <strong>95% of the poorest households have limited access to green environments, compared to 72% of the wealthiest</strong>.<br><br>In Geneva, density equalizes pollution exposure, but creates stark inequality in access to nature.',
+        'The geography tells the story: <span style="background: #313695; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;clusters with abundant vegetation access</span> spread across the city\'s periphery, while <span style="background: #a50026; color: white; padding: 0 0.3em; border-radius: 0.3em;">poor&nbsp;clusters with limited green space</span> concentrate in the dense urban center.<br><br>The final picture is striking: <strong>95% of the poorest households have limited access to green environments, compared to 72% of the wealthiest</strong>.<br><br>In Geneva, density equalizes pollution exposure, but creates stark inequality in access to nature.',
       getLocation: function () {
         return config.getLocation(config.cities.geneva, "cityDetail", 45, 0);
       },
@@ -762,7 +762,7 @@ var config = {
         height: 654,
       },
       description:
-        'The divide is clear: <span style="background: #ff8c00; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;households cluster in the quiet east and north</span>, while <span style="background: #d32f2f; color: white; padding: 0 0.3em; border-radius: 0.3em;">poor&nbsp;families concentrate in the noisy center and west</span>.<br><br>In Lausanne, <strong>55% of the poorest households face noise above 50 dB, compared to just 28% of the wealthiest.</strong>',
+        'The divide is clear: <span style="background: #313695; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;households cluster in the quiet east and north</span>, while <span style="background: #a50026; color: white; padding: 0 0.3em; border-radius: 0.3em;">poor&nbsp;families concentrate in the noisy center and west</span>.<br><br>In Lausanne, <strong>55% of the poorest households face noise above 50 dB, compared to just 28% of the wealthiest.</strong>',
       getLocation: function () {
         return config.getLocation(
           config.cities.lausanne,
@@ -879,7 +879,7 @@ var config = {
       hidden: false,
       title: "Concentrated green inequality",
       description:
-        'The pattern mirrors the noise distribution: <span style="background: #ff8c00; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;green&nbsp;clusters</span> flourish in the leafy periphery of east and north Lausanne, while <span style="background: #d32f2f; color: white; padding: 0 0.3em; border-radius: 0.3em;">poor&nbsp;concrete&nbsp;clusters</span> are trapped in the dense city center.<br><br>The numbers tell a stark story: <strong>while 72% of wealthy households have limited green space nearby, this rises to 95% for the poorest families. Nature becomes another marker of privilege.</strong>',
+        'The pattern mirrors the noise distribution: <span style="background: #313695; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;green&nbsp;clusters</span> flourish in the leafy periphery of east and north Lausanne, while <span style="background: #a50026; color: white; padding: 0 0.3em; border-radius: 0.3em;">poor&nbsp;concrete&nbsp;clusters</span> are trapped in the dense city center.<br><br>The numbers tell a stark story: <strong>while 72% of wealthy households have limited green space nearby, this rises to 95% for the poorest families. Nature becomes another marker of privilege.</strong>',
       chart: {
         type: "datawrapper",
         embedUrl: "https://datawrapper.dwcdn.net/HfB0J/1/",
