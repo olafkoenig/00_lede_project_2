@@ -1,0 +1,126 @@
+---
+title: "sm_charts_simpidied"
+author: "olaf könig"
+format: html
+editor: visual
+---
+
+```{r}
+
+sf_grouped <- read_sf("data_input/data_edit/cities_reclassified.gpkg")
+```
+
+```{r}
+
+dw_cities_bar_charts <- sf_grouped %>% 
+  st_drop_geometry() %>% 
+  group_by(
+           ssep3d_local_4
+           ) %>% 
+  summarise(
+      # n = n(),
+      pct_above_50_noise = mean(noise > 50) * 100,
+      pct_above_15_no2   = mean(no2 > 15) * 100,
+      pct_above_50_ndvi  = mean(ndvi_200m > 0.5) * 100,
+      .groups = "drop"
+    ) %>% 
+  rename(
+    "Households exposed to noise >50 dB, in %" = pct_above_50_noise,
+    "Households exposed to NO₂ >15 μg/m³, in %"= pct_above_15_no2,
+    'Households with limited green access: less than 50% of "green" surfaces within 200m, in %' = pct_above_50_ndvi
+  ) %>% 
+  pivot_longer(
+    cols = starts_with("Households"),
+    names_to = "indicator",
+    values_to = "value"
+  ) %>% 
+mutate(
+    ssep3d_local_4_label = case_when(
+      ssep3d_local_4 == 1 ~ "Lowest",
+      ssep3d_local_4 == 2 ~ "Lower-middle", 
+      ssep3d_local_4 == 3 ~ "Upper-middle",
+      ssep3d_local_4 == 4 ~ "Highest",
+      TRUE ~ as.character(ssep3d_local_4)  # garde les valeurs inattendues
+    )
+  )
+
+
+dw_cities_bar_charts
+```
+
+## Chart for agregated cities
+
+<https://app.datawrapper.de/edit/BnMJJ/upload>
+
+```{r}
+
+dw_barchart_folderid <- "337906"
+
+dw_cities_bar_charts %>%
+  arrange(desc(ssep3d_local_4)) %>% 
+  # filter(name_en == first(name_en)) %>% 
+  dw_data_to_chart("BnMJJ")
+```
+
+## Chart for agregated Switzerland
+
+```{r}
+
+dw_national_quartiles <- read.csv("data_input/data_edit/dw_national_quartiles.csv")
+
+dw_national_quartiles %>% names
+```
+
+<https://app.datawrapper.de/edit/Qsh2p/visualize#annotate>
+
+```{r}
+
+dw_national_quartiles %>% 
+  rename(
+    "Households exposed to noise >50 dB, in %" = pct_above_50_noise,
+    "Households exposed to NO₂ >15 μg/m³, in %" = pct_above_15_no2) %>% 
+  pivot_longer(
+    cols = starts_with("Households"),
+    names_to = "indicator",
+    values_to = "value"
+  ) %>% 
+mutate(
+    ssep3_global_quartiles = case_when(
+      ssep3_global_quartiles == 1 ~ "Lowest",
+      ssep3_global_quartiles == 2 ~ "Lower-middle", 
+      ssep3_global_quartiles == 3 ~ "Upper-middle",
+      ssep3_global_quartiles == 4 ~ "Highest",
+      TRUE ~ as.character(ssep3_global_quartiles)  # garde les valeurs inattendues
+    )) %>% 
+  dw_data_to_chart("Qsh2p")
+```
+
+## Batch production
+
+```{r}
+
+# # Liste des villes
+# cities <- unique(dw_cities_bar_charts$name_en)
+# 
+# # Fonction simple pour une ville
+# create_chart_for_city <- function(city) {
+#   # Clone + configure
+#   new_chart <- dw_copy_chart("BnMJJ")
+#   chart_id <- new_chart[["id"]]
+#   
+#   dw_edit_chart(chart_id, title = city, folderId = "337906")
+#   
+#   # Data + publish
+#   city_data <- dw_cities_bar_charts %>% filter(name_en == city)
+#   dw_data_to_chart(city_data, chart_id = chart_id)
+#   dw_publish_chart(chart_id)
+#   
+#   return(chart_id)
+# }
+# 
+# # Apply
+# chart_ids <- map_chr(cities, create_chart_for_city)
+# 
+# # Résultat
+# tibble(city = cities, chart_id = chart_ids)
+```
