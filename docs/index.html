@@ -32,7 +32,6 @@
     <div class="article-section pre-scrollytelling">
       <!-- Article Header -->
       <div class="header">
-        <p class="kicker">Environmental Inequalities in Swiss Cities</p>
         <h1 class="headline">
           Clean Air and Green Space Follow Wealth in Swiss Cities
         </h1>
@@ -42,7 +41,7 @@
           how Swiss cities quietly segregate by environmental quality.
         </h2>
         <p class="byline">By Olaf König</p>
-        <p class="date">July 2025</p>
+        <p class="date">August 2025</p>
       </div>
 
       <!-- Introduction Text -->
@@ -164,11 +163,219 @@
           invisible—or finally demand attention.
         </p>
 
-        <p class="note">
-          Note méthodologique : Les données utilisées proviennent des offices
-          fédéraux de l'environnement et de la statistique, traitées selon la
-          méthode XYZ.
-        </p>
+        <div class="methodology-box">
+          <div class="methodology-header" onclick="toggleMethodology()">
+            <span class="methodology-title">Methodology</span>
+            <span class="expand-icon" id="expandIcon">▼</span>
+          </div>
+
+          <div class="methodology-content" id="methodologyContent">
+            <h3>Data Sources and Study Area</h3>
+            <p>
+              This analysis examines environmental inequalities across
+              Switzerland's 10 largest cities by population in 2023. The study
+              combines household-level socio-economic data originally from the
+              Swiss Federal Statistical Office (SFSO) but updated and processed
+              according to
+              <a
+                href="https://smw.ch/index.php/smw/article/view/3285"
+                target="_blank"
+                >Panczak et al. (2023)</a
+              >
+              with multiple environmental exposure datasets to assess
+              disparities in environmental quality across socio-economic groups
+              (reflecting 2015 conditions).
+            </p>
+
+            <p>
+              Socio-economic status was measured using the
+              <strong>Swiss-SEP 3</strong>
+              (Swiss neighbourhood index of socioeconomic position 3), a hybrid
+              index that combines updated values for neighborhoods around
+              buildings constructed after 2000 (based on 2012-2015
+              micro-censuses) with original Swiss-SEP 1 values for older
+              neighborhoods (based on 2000 census data). This high-resolution
+              index defines neighborhoods around each residential building
+              comprising approximately 50 households, incorporating variables
+              such as rent per square meter, overcrowding, education level, and
+              occupational classification.
+            </p>
+            <p>
+              Environmental exposures were assessed through three key
+              indicators:
+            </p>
+            <ul>
+              <li>
+                <strong>Daytime road traffic noise:</strong> 10-meter resolution
+                raster released by
+                <a
+                  href="https://www.bafu.admin.ch/bafu/de/home/themen/laerm/publikationen-studien/publikationen/laermbelastung-in-der-schweiz-sonbase.html"
+                  target="_blank"
+                  >FOEN in 2025</a
+                >
+                (reflecting 2021 conditions)
+              </li>
+              <li>
+                <strong>Nitrogen dioxide concentrations:</strong> 20-meter
+                resolution raster produced by
+                <a
+                  href="https://www.bafu.admin.ch/bafu/en/home/topics/air/luftbelastung/data/historical-data/maps-of-annual-values.html"
+                  target="_blank"
+                  >Meteotest in 2021</a
+                >
+              </li>
+              <li>
+                <strong>Green space access:</strong> derived from satellite
+                imagery using the Normalized Difference Vegetation Index (NDVI)
+                from Copernicus satellite data processed through Google Earth
+                Engine, with values averaged across summer months (June to
+                August) for the period 2022-2024 (<a
+                  href="https://www.tagesanzeiger.ch/satellitenbildanalyse-zeigt-so-gruen-sind-die-schweizer-staedte-933567826191"
+                  target="_blank"
+                  >König, 2024</a
+                >)
+              </li>
+            </ul>
+
+            <p>
+              Spatial extraction between household points and environmental
+              rasters was performed using bilinear interpolation method.
+            </p>
+
+            <p>
+              Due to statistical confidentiality requirements for
+              household-level data, results are presented in generalized form
+              using hexagonal grids and spatial clusters in maps.
+            </p>
+
+            <h3>Analytical Framework</h3>
+            <p>
+              The analysis employed a local quartile classification approach,
+              dividing households within each city into four socio-economic
+              groups based on their SSEP scores, where quartile 1 represents the
+              lowest socio-economic status and quartile 4 the highest.
+              Similarly, environmental exposures were classified into local
+              quartiles for each city, with quartile 1 indicating the lowest
+              exposure or best environmental conditions, and quartile 4
+              representing the highest exposure or worst conditions.
+            </p>
+
+            <p>
+              Environmental inequalities were quantified by calculating the
+              percentage of households in each socio-economic quartile that
+              exceeded established environmental health thresholds. For noise
+              pollution, the threshold was set at 50 dB. Air pollution exposure
+              was measured against NO₂ concentrations of 15 μg/m³. Green space
+              access was assessed by identifying households with "limited"
+              vegetation coverage, defined as less than 50% "green surface"
+              (corresponding to NDVI values below 0.5) within a 200-meter
+              radius.
+            </p>
+
+            <p>
+              The magnitude of environmental inequality within each city was
+              calculated as the percentage point difference in exposure rates
+              between the lowest and highest socio-economic quartiles. Negative
+              values indicate disproportionately higher exposure among lower
+              socio-economic groups, representing environmental injustice
+              patterns.
+            </p>
+
+            <h3>Methodological Considerations</h3>
+            <p>
+              The NDVI indicator was inverted to represent "lack of green
+              access" rather than green abundance, ensuring consistency with
+              pollution exposure metrics where higher values indicate worse
+              environmental conditions.
+            </p>
+            <p>
+              This local quartile classification approach enables city-specific
+              analysis while maintaining comparability across different urban
+              contexts, accounting for the varying baseline environmental
+              conditions and socio-economic distributions across Swiss cities.
+              The methodology combines official administrative data with
+              satellite-derived environmental indicators, providing a
+              comprehensive assessment of environmental exposure patterns at
+              high spatial resolution.
+            </p>
+
+            <h3>Other Data Sources</h3>
+            <ul>
+              <li>
+                <strong>Municipal boundaries:</strong>
+                <a
+                  href="https://www.swisstopo.admin.ch/en/landscape-model-swissboundaries3d"
+                  target="_blank"
+                  >SwissBOUNDARIES3D</a
+                >
+                from Swisstopo for commune delimitation
+              </li>
+              <li>
+                <strong>Water bodies:</strong>
+                <a
+                  href="https://www.swisstopo.admin.ch/en/landscape-model-swisstlm3d"
+                  target="_blank"
+                  >swissTLM3D</a
+                >
+                from Swisstopo for lake boundaries (to exclude water surfaces
+                from NDVI calculations for waterfront residents)
+              </li>
+            </ul>
+
+            <div class="references">
+              <h4>References</h4>
+              <ul>
+                <li>
+                  Panczak, R., Galobardes, B., Voorpostel, M., Spoerri, A.,
+                  Zwahlen, M., & Egger, M. (2012). A Swiss neighbourhood index
+                  of socioeconomic position: development and association with
+                  mortality. <em>Swiss Medical Weekly</em>, 142, w13604.
+                  <a
+                    href="https://smw.ch/index.php/smw/article/view/3285"
+                    target="_blank"
+                    >https://smw.ch/index.php/smw/article/view/3285</a
+                  >
+                </li>
+                <li>
+                  Federal Office for the Environment (OFEV). (2025). Road
+                  traffic noise exposure data.
+                  <a
+                    href="https://www.bafu.admin.ch/bafu/de/home/themen/laerm/publikationen-studien/publikationen/laermbelastung-in-der-schweiz-sonbase.html"
+                    target="_blank"
+                    >https://www.bafu.admin.ch/bafu/de/home/themen/laerm/publikationen-studien/publikationen/laermbelastung-in-der-schweiz-sonbase.html</a
+                  >
+                </li>
+                <li>
+                  Federal Office for the Environment (OFEV). (2021). Annual NO₂
+                  concentration maps.
+                  <a
+                    href="https://www.bafu.admin.ch/bafu/en/home/topics/air/luftbelastung/data/historical-data/maps-of-annual-values.html"
+                    target="_blank"
+                    >https://www.bafu.admin.ch/bafu/en/home/topics/air/luftbelastung/data/historical-data/maps-of-annual-values.html</a
+                  >
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <script>
+          function toggleMethodology() {
+            const content = document.getElementById("methodologyContent");
+            const icon = document.getElementById("expandIcon");
+
+            if (
+              content.style.display === "none" ||
+              content.style.display === ""
+            ) {
+              content.style.display = "block";
+              icon.innerHTML = "▲";
+            } else {
+              content.style.display = "none";
+              icon.innerHTML = "▼";
+            }
+          }
+        </script>
       </div>
     </div>
 

@@ -326,3 +326,48 @@ a:visited {
   .mapboxgl-canvas {
   touch-action: unset;
 }
+
+/* Methodology styline */
+
+.methodology-box {
+  margin: 2rem 0;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+  font-family: inherit;
+}
+
+.methodology-header {
+  padding: 1rem 1.5rem;
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 8px 8px 0 0;
+}
+
+.methodology-title {
+  font-weight: bold;
+  font-size: 1.1em;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #333;
+}
+
+.methodology-content {
+  padding: 1.5rem;
+  display: none;
+  line-height: 1.6;
+}
+
+.methodology-content p {
+  margin-bottom: 1rem;
+}
+
+.methodology-content a {
+  color: var(--link-color, #0066cc);
+  text-decoration: none;
+}
