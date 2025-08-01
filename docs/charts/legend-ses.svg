@@ -6,16 +6,16 @@
   
   <!-- Hexagones de couleur - rapprochés -->
   <!-- Hexagone 1 - Violet foncé -->
-  <polygon points="40,35 55,27 70,35 70,51 55,59 40,51" fill="hsl(285, 49%, 39%)" stroke="#333" stroke-width="0.5"/>
+  <polygon points="40,35 55,27 70,35 70,51 55,59 40,51" fill="#7c3394ff" stroke="#333" stroke-width="0.5"/>
   
   <!-- Hexagone 2 - Violet clair -->
-  <polygon points="90,35 105,27 120,35 120,51 105,59 90,51" fill="hsl(281, 30%, 73%)" stroke="#333" stroke-width="0.5"/>
+  <polygon points="90,35 105,27 120,35 120,51 105,59 90,51" fill="#c2a5cfff" stroke="#333" stroke-width="0.5"/>
   
   <!-- Hexagone 3 - Vert clair -->
-  <polygon points="140,35 155,27 170,35 170,51 155,59 140,51" fill="hsl(114, 45%, 74%)" stroke="#333" stroke-width="0.5"/>
+  <polygon points="140,35 155,27 170,35 170,51 155,59 140,51" fill="#a5db9fff" stroke="#333" stroke-width="0.5"/>
   
   <!-- Hexagone 4 - Vert foncé -->
-  <polygon points="190,35 205,27 220,35 220,51 205,59 190,51" fill="hsl(144, 100%, 27%)" stroke="#333" stroke-width="0.5"/>
+  <polygon points="190,35 205,27 220,35 220,51 205,59 190,51" fill="#008a37ff" stroke="#333" stroke-width="0.5"/>
   
   <!-- Labels sous les hexagones -->
   <text x="55" y="75" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="#666">Lowest</text>
