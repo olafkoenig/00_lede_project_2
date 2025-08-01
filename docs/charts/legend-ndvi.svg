@@ -1,7 +1,7 @@
 <svg width="400" height="110" xmlns="http://www.w3.org/2000/svg">
   <!-- Titre aligné à gauche -->
   <text x="20" y="20" text-anchor="start" font-family="IBM Plex Sans, sans-serif" font-size="14" font-weight="600" fill="#333">
-    Vegetation density
+    Vegetation intensity
   </text>
   
   <!-- Carrés de couleur qui se touchent -->
