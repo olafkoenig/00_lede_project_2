@@ -222,7 +222,7 @@ print(summary)
 
 ```{r}
 
-df %>% 
+dw_national_quartiles <- df %>% 
   mutate(
     ssep3_global_quartiles = ntile(ssep3, 4)
   ) %>% 
@@ -233,6 +233,8 @@ group_by(ssep3_global_quartiles) %>%
       pct_above_15_no2   = mean(no2 > 15) * 100,
       .groups = "drop"
     ) 
+
+dw_national_quartiles %>% write.csv("data_input/data_edit/dw_national_quartiles.csv")
 ```
 
 ```{r}
@@ -270,7 +272,7 @@ ggplot(summary_long, aes(x = factor(ssep3_q), y = pct_exposes)) +
 
 ```
 
-## DW National chart
+## DW National chart - exploration
 
 <https://app.datawrapper.de/edit/04LLy/upload>
 
@@ -419,7 +421,7 @@ df_10cities_summary <- cities_points_ssep_reclassified %>%
 df_10cities_summary
 ```
 
-### DW 10 cities agregated data
+### DW 10 cities agregated data - Exploration 2 threshold
 
 <https://app.datawrapper.de/edit/8x6fU/visualize#refine>
 
@@ -459,7 +461,7 @@ df_10cities_dw <- df_10cities_long %>%
 df_10cities_dw %>% dw_data_to_chart("8x6fU")
 ```
 
-### DW ~~Lollipop~~ chart agregated 10 cities - bar chart with lowest and highest & difference
+### DW ~~Lollipop~~ chart agregated 10 cities - bar chart with lowest and highest & difference  - Exploration 
 
 <https://app.datawrapper.de/edit/VLiac/visualize#refine>
 
@@ -636,7 +638,7 @@ cities_points_ssep_reclassified_pairs <- cities_points_ssep_reclassified %>%
 
 ```
 
-### DW Template scatterplot - one per cities
+### DW Template scatterplot - one per cities  - Exploration small multiple
 
 <https://app.datawrapper.de/edit/zA7Km/visualize#annotate>
 
