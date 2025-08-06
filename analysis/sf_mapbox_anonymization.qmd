@@ -13,6 +13,8 @@ editor: visual
 
 3.  Find centroides coordinates
 
+4.  Create files for situation map
+
 # Load data
 
 ## SSEP
@@ -198,4 +200,43 @@ print(city_centroids)
 
 # Export optionnel pour Mapbox
 write_csv(city_centroids, "data_output/city_centroids_mapbox.csv")
+```
+
+## Create DW situation map
+
+<https://app.datawrapper.de/edit/Vtcfz/markers>
+
+```{r}
+
+dw_cities_situation_mobile <- city_centroids %>% 
+  left_join(df_cities_pop) %>% 
+  mutate(
+    name = name_en,
+    "text-fontSize" = 8,
+    "text-color" = "#2c3e50",
+    icon = "square",
+    color = "#2c3e50",
+    scale = scales::rescale(sqrt(POP_2023), to = c(0.5, 1.75)),
+    mobile = TRUE,
+    desktop = FALSE
+  )
+
+dw_cities_situation_desktop <- city_centroids %>% 
+  left_join(df_cities_pop) %>% 
+  mutate(
+    name = name_en,
+    "text-fontSize" = 12,
+    "text-color" = "#2c3e50",
+    icon = "square",
+    color = "#2c3e50",
+    scale = scales::rescale(sqrt(POP_2023), to = c(0.5, 2)),
+    mobile = FALSE,
+    desktop = TRUE
+  )
+
+
+dw_cities_situation <- rbind(dw_cities_situation_mobile, dw_cities_situation_desktop)
+
+dw_cities_situation %>%
+  write_csv("data_output/dw_situation_map/dw_cities_situation.csv")
 ```
