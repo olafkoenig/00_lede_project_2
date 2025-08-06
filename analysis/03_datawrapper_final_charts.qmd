@@ -1,0 +1,336 @@
+---
+title: "03_datawrapper_final_charts"
+author: "Olaf König"
+format: html
+editor: visual
+---
+
+# Datawrapper charts for environmental inequality analysis
+
+## Objective
+
+Export data to the 9 specific Datawrapper charts used in the final article. Each chart shows different aspects of environmental inequalities across Swiss cities.
+
+## Source data
+
+-   `data_input/data_edit/cities_reclassified.gpkg` - Cities with local classifications
+-   `df_stats_long` - Aggregate statistics from previous script
+-   National dataset for comparison charts
+
+## Charts exported
+
+-   **National comparison**: `Qsh2p` (national quartiles)
+-   **City aggregation**: `BnMJJ` (cities bar chart)\
+-   **City disparities**: `iLHkd` (lollipop chart)
+-   **City scatterplots**: `rffGE`, `8ZPgH`, `qRJ8l`, `MJu0Z`, `HfB0J` (5 specific cities/indicators)
+-   **Situation map**: `4bAiG` (cities location map)
+
+------------------------------------------------------------------------
+
+```{r setup}
+library(tidyverse)
+library(sf)
+library(DatawRappr)
+```
+
+```{r load-data}
+# Load classified cities data
+sf_grouped <- read_sf("data_input/data_edit/cities_reclassified.gpkg")
+
+# Recreate df_stats_long if not in memory (should be from previous script)
+if (!exists("df_stats_long")) {
+  source("02_prepare_cities_analysis.qmd") # Or load from saved file
+}
+```
+
+# 1. National comparison charts
+
+## 1.1 National quartiles baseline (Qsh2p)
+
+```{r}
+# Calculate national quartiles for comparison
+sf_national <- read_sf("data_input/data_edit/sep_cross_noise_no2_ndvi.gpkg") %>% 
+  select(ssep3:geom) %>% 
+  select(id, bfs_nummer, everything())
+
+df_national <- sf_national %>% st_drop_geometry()
+
+dw_national_quartiles <- df_national %>% 
+  mutate(
+    ssep3_global_quartiles = ntile(ssep3, 4)
+  ) %>% 
+  group_by(ssep3_global_quartiles) %>% 
+  summarise(
+    pct_above_50_noise = mean(noise > 50) * 100,
+    pct_above_15_no2   = mean(no2 > 15) * 100,
+    .groups = "drop"
+  ) %>% 
+  rename(
+    "Households exposed to noise >50 dB, in %" = pct_above_50_noise,
+    "Households exposed to NO₂ >15 μg/m³, in %" = pct_above_15_no2
+  ) %>% 
+  pivot_longer(
+    cols = starts_with("Households"),
+    names_to = "indicator",
+    values_to = "value"
+  ) %>% 
+  mutate(
+    ssep3_global_quartiles_label = case_when(
+      ssep3_global_quartiles == 1 ~ "Lowest",
+      ssep3_global_quartiles == 2 ~ "Lower-middle", 
+      ssep3_global_quartiles == 3 ~ "Upper-middle",
+      ssep3_global_quartiles == 4 ~ "Highest",
+      TRUE ~ as.character(ssep3_global_quartiles)
+    )
+  ) %>% 
+  arrange(desc(ssep3_global_quartiles))
+
+# Export to Datawrapper
+dw_national_quartiles %>% 
+  dw_data_to_chart("Qsh2p")
+
+cat("✅ National quartiles exported to Qsh2p\n")
+```
+
+# 2. City aggregation charts
+
+## 2.1 Cities aggregated bar chart (BnMJJ)
+
+```{r}
+# Aggregate across all 10 cities
+dw_cities_bar_charts <- sf_grouped %>% 
+  st_drop_geometry() %>% 
+  group_by(ssep3d_local_4) %>% 
+  summarise(
+    pct_above_50_noise = mean(noise > 50) * 100,
+    pct_above_15_no2   = mean(no2 > 15) * 100,
+    pct_above_50_ndvi  = mean(ndvi_200m > 0.5) * 100,
+    .groups = "drop"
+  ) %>% 
+  rename(
+    "Households exposed to noise >50 dB, in %" = pct_above_50_noise,
+    "Households exposed to NO₂ >15 μg/m³, in %" = pct_above_15_no2,
+    'Households with limited green access: less than 50% of "green" surfaces within 200m, in %' = pct_above_50_ndvi
+  ) %>% 
+  pivot_longer(
+    cols = starts_with("Households"),
+    names_to = "indicator",
+    values_to = "value"
+  ) %>% 
+  mutate(
+    ssep3d_local_4_label = case_when(
+      ssep3d_local_4 == 1 ~ "Lowest",
+      ssep3d_local_4 == 2 ~ "Lower-middle", 
+      ssep3d_local_4 == 3 ~ "Upper-middle",
+      ssep3d_local_4 == 4 ~ "Highest",
+      TRUE ~ as.character(ssep3d_local_4)
+    )
+  ) %>%
+  arrange(desc(ssep3d_local_4))
+
+
+
+# Export to Datawrapper
+dw_cities_bar_charts %>%
+  dw_data_to_chart("BnMJJ")
+
+cat("✅ Cities aggregated bars exported to BnMJJ\n")
+```
+
+## 2.2 City disparities lollipop chart (iLHkd)
+
+```{r}
+# Calculate differences between lowest and highest SES quartiles
+dw_cities_lollipop <- df_stats_long %>% 
+  filter(
+    quantile_type == "Quartiles",
+    group %in% c(1, 4),
+    indicator_label %in% c(
+      "Exposed to noise >50 dB",
+      "Exposed to NO₂ >15 μg/m³",
+      "Limited green access (NDVI < 0.5)"
+    )
+  ) %>% 
+  select(bfs_nummer, name_en, group, indicator_label, value) %>% 
+  mutate(
+    indicator_label_en = case_when(
+      indicator_label == "Exposed to noise >50 dB" ~ "Households exposed to noise >50 dB, in %",
+      indicator_label == "Exposed to NO₂ >15 μg/m³" ~ "Households exposed to NO₂ >15 μg/m³, in %",
+      indicator_label == "Limited green access (NDVI < 0.5)" ~ 'Households with limited green access: less than 50% of "green" surfaces within 200m, in %'
+    )
+  ) %>% 
+  pivot_wider(
+    names_from = "group",
+    values_from = "value"
+  ) %>% 
+  mutate(
+    difference = `1` - `4`
+  ) %>% 
+  rename(
+    "Lowest SES" = `1`,
+    "Highest SES" = `4`
+  )
+
+
+
+# Export to Datawrapper
+dw_cities_lollipop %>%
+  dw_data_to_chart("iLHkd")
+
+cat("✅ City disparities lollipop exported to iLHkd\n")
+```
+
+# 3. City-specific scatterplots
+
+## 3.1 St-Gallen NO₂ scatterplot (rffGE)
+
+```{r}
+sf_grouped %>%
+  st_drop_geometry() %>%
+  filter(bfs_nummer == 3203) %>%  # St-Gallen
+  select(ssep3, no2, ssep_no2_label) %>%
+  dw_data_to_chart("rffGE")
+
+
+cat("✅ St-Gallen NO₂ scatterplot exported to rffGE\n")
+```
+
+## 3.2 Geneva NO₂ scatterplot (8ZPgH)
+
+```{r}
+sf_grouped %>% 
+  st_drop_geometry() %>%
+  filter(bfs_nummer == 6621) %>%  # Geneva
+  select(ssep3, no2, ssep_no2_label) %>% 
+  dw_data_to_chart("8ZPgH")
+
+cat("✅ Geneva NO₂ scatterplot exported to 8ZPgH\n")
+```
+
+## 3.3 Geneva NDVI scatterplot (qRJ8l)
+
+```{r}
+sf_grouped %>% 
+  st_drop_geometry() %>%
+  filter(bfs_nummer == 6621) %>%  # Geneva
+  select(ssep3, ndvi_200m, ssep_ndvi_label) %>% 
+  mutate(ndvi_200m = ndvi_200m * 100) %>%  # Convert to percentage
+  dw_data_to_chart("qRJ8l")
+
+cat("✅ Geneva NDVI scatterplot exported to qRJ8l\n")
+```
+
+## 3.4 Lausanne noise scatterplot (MJu0Z)
+
+```{r}
+sf_grouped %>% 
+  st_drop_geometry() %>%
+  filter(bfs_nummer == 5586) %>%  # Lausanne
+  select(ssep3, noise, ssep_noise_label) %>% 
+  dw_data_to_chart("MJu0Z")
+
+cat("✅ Lausanne noise scatterplot exported to MJu0Z\n")
+```
+
+## 3.5 Lausanne NDVI scatterplot (HfB0J)
+
+```{r}
+sf_grouped %>% 
+  st_drop_geometry() %>%
+  filter(bfs_nummer == 5586) %>%  # Lausanne
+  select(ssep3, ndvi_200m, ssep_ndvi_label) %>% 
+  mutate(ndvi_200m = ndvi_200m * 100) %>%  # Convert to percentage
+  dw_data_to_chart("HfB0J")
+
+cat("✅ Lausanne NDVI scatterplot exported to HfB0J\n")
+```
+
+# 4. Situation map data export
+
+## 4.1 Cities situation map (4bAiG)
+
+```{r}
+# Recreate city centroids and population data for situation map
+sf_municipalities <- read_sf("data_input/data_raw/sf_polg_swisstopo.gpkg")
+df_cities_pop <- read_csv("data_input/data_raw/stats_cities.csv") %>% 
+  select(bfs_nummer, nom_officiel, POP_2023)
+
+list_cities_10 <- df_cities_pop %>% 
+  slice_max(POP_2023, n = 10) %>% 
+  pull(bfs_nummer)
+
+sf_cities_10 <- sf_municipalities %>% 
+  filter(bfs_nummer %in% list_cities_10)
+
+cities_translation <- tibble(
+  bfs_nummer = c(261, 6621, 2701, 5586, 351, 230, 1061, 3203, 5192, 371),
+  name_en = c(
+    "Zurich", "Geneva", "Basel", "Lausanne", "Bern",
+    "Winterthur", "Lucerne", "St. Gallen", "Lugano", "Biel/Bienne"
+  )
+)
+
+# Calculate city centroids
+city_centroids <- sf_cities_10 %>%
+  st_transform(4326) %>%  # WGS84 for Datawrapper
+  st_centroid() %>%
+  mutate(
+    longitude = st_coordinates(.)[,1],
+    latitude = st_coordinates(.)[,2]
+  ) %>%
+  st_drop_geometry() %>%
+  select(bfs_nummer, name, longitude, latitude) %>%
+  left_join(cities_translation, by = "bfs_nummer") %>%
+  left_join(df_cities_pop, by = "bfs_nummer")
+
+# Create mobile and desktop versions
+dw_cities_situation_mobile <- city_centroids %>% 
+  mutate(
+    name = name_en,
+    "text-fontSize" = 8,
+    "text-color" = "#2c3e50",
+    icon = "square",
+    color = "#2c3e50",
+    scale = scales::rescale(sqrt(POP_2023), to = c(0.5, 1.75)),
+    mobile = TRUE,
+    desktop = FALSE
+  )
+
+dw_cities_situation_desktop <- city_centroids %>% 
+  mutate(
+    name = name_en,
+    "text-fontSize" = 12,
+    "text-color" = "#2c3e50",
+    icon = "square",
+    color = "#2c3e50",
+    scale = scales::rescale(sqrt(POP_2023), to = c(0.5, 2)),
+    mobile = FALSE,
+    desktop = TRUE
+  )
+
+dw_cities_situation <- rbind(dw_cities_situation_mobile, dw_cities_situation_desktop)
+
+# Export to file (Datawrapper maps need manual CSV upload)
+dir.create("data_output/dw_situation_map", showWarnings = FALSE, recursive = TRUE)
+dw_cities_situation %>%
+  write_csv("data_output/dw_situation_map/dw_cities_situation.csv")
+
+cat("✅ Situation map data exported to data_output/dw_situation_map/dw_cities_situation.csv\n")
+cat("ℹ️  Manual upload required to Datawrapper map 4bAiG\n")
+```
+
+# 5. Summary
+
+```{r}
+cat("\n📊 All Datawrapper charts updated:\n")
+cat("- Qsh2p: National quartiles comparison\n")
+cat("- BnMJJ: Cities aggregated bars\n") 
+cat("- iLHkd: City disparities lollipop\n")
+cat("- rffGE: St-Gallen NO₂ scatterplot\n")
+cat("- 8ZPgH: Geneva NO₂ scatterplot\n")
+cat("- qRJ8l: Geneva NDVI scatterplot\n")
+cat("- MJu0Z: Lausanne noise scatterplot\n")
+cat("- HfB0J: Lausanne NDVI scatterplot\n")
+cat("- 4bAiG: Situation map (CSV exported for manual upload)\n")
+cat("\n✅ All charts ready for publication!\n")
+```

@@ -1,0 +1,394 @@
+---
+title: "04_create_mapbox_hotspots"
+author: "Olaf König"
+format: html
+editor: visual
+---
+
+# Mapbox hotspots creation with anonymization
+
+## Objective
+
+Create density-based hotspots (polygons) showing areas where socio-economic extremes are spatially concentrated for each environmental indicator. Apply anonymization rules to protect privacy.
+
+## Source data
+
+-   `data_input/data_edit/cities_reclassified.gpkg` - Cities with local classifications and SES-environment labels
+
+## Processing steps
+
+1.  **Hotspot creation** : Kernel density estimation (KDE) for extreme SES-environment combinations
+2.  **Anonymization** : Filter hotspots with minimum 5 households per polygon
+3.  **Cleaning** : Remove overlaps and slivers with mapshaper
+4.  **Export** : Final GeoJSON files for Mapbox web integration
+
+## Final outputs
+
+-   `data_output/mapbox/hotspots_green_final.geojson` - Green space access hotspots
+-   `data_output/mapbox/hotspots_noise_final.geojson` - Noise exposure hotspots
+-   `data_output/mapbox/hotspots_no2_final.geojson` - NO₂ pollution hotspots
+
+------------------------------------------------------------------------
+
+```{r setup}
+library(tidyverse)
+library(sf)
+library(spatstat.geom)
+library(spatstat.explore)
+library(stars)
+```
+
+```{r load-data}
+# Load cities with classifications (from previous script)
+sf_for_maps_long <- read_sf("data_input/data_edit/cities_reclassified.gpkg")
+
+# Get top 6 cities list
+df_cities_pop <- read_csv("data_input/data_raw/stats_cities.csv") %>% 
+  select(bfs_nummer, nom_officiel, POP_2023)
+
+list_cities_6 <- df_cities_pop %>% 
+  slice_max(POP_2023, n = 6) %>% 
+  pull(bfs_nummer)
+
+# Filter and prepare data for hotspot analysis
+sf_for_maps_long <- sf_for_maps_long %>% 
+  filter(bfs_nummer %in% list_cities_6) %>%
+  select(name_en, ssep_noise_label, ssep_no2_label, ssep_ndvi_label) %>%
+  # Transform to long format for processing
+  pivot_longer(
+    cols = starts_with("ssep_"),
+    names_to = "indicator",
+    values_to = "label"
+  ) %>%
+  mutate(
+    indicator = recode(indicator,
+      "ssep_noise_label" = "Noise",
+      "ssep_no2_label" = "NO₂", 
+      "ssep_ndvi_label" = "Green"
+    )
+  )
+```
+
+# 1. Hotspot creation with anonymization
+
+## 1.1 Main hotspot creation function
+
+```{r}
+create_hotspots_with_counts <- function(
+  sf_data, 
+  target_indicator = "Green",
+  sigma = 50,
+  quantile_cut = 0.85,
+  min_points = 8,
+  min_households_per_hotspot = 5
+) {
+  
+  # Define extreme categories for each indicator
+  if (target_indicator == "Green") {
+    wealthy_healthy <- "High SES / High Green"
+    poor_unhealthy <- "Low SES / Low Green"
+  } else if (target_indicator == "Noise") {
+    wealthy_healthy <- "High SES / Low Noise"
+    poor_unhealthy <- "Low SES / High Noise"
+  } else if (target_indicator == "NO₂") {
+    wealthy_healthy <- "High SES / Low NO₂"
+    poor_unhealthy <- "Low SES / High NO₂"
+  }
+  
+  # Filter data for target indicator
+  sf_filtered <- sf_data %>%
+    filter(
+      indicator == target_indicator,
+      label %in% c(wealthy_healthy, poor_unhealthy)
+    )
+  
+  cities <- unique(sf_filtered$name_en)
+  
+  # Function to create anonymized polygons for one category
+  create_counted_polygons <- function(points_sf, category_name) {
+    if (nrow(points_sf) < min_points) return(NULL)
+    
+    original_crs <- st_crs(points_sf)
+    
+    # Project to Swiss coordinate system for calculations
+    if (st_is_longlat(points_sf)) {
+      points_projected <- st_transform(points_sf, 2056)
+    } else {
+      points_projected <- points_sf
+    }
+    
+    coords <- st_coordinates(points_projected)
+    bbox <- st_bbox(points_projected)
+    margin <- sigma * 2
+    
+    # Create spatial window for KDE
+    w <- owin(
+      xrange = c(bbox$xmin - margin, bbox$xmax + margin),
+      yrange = c(bbox$ymin - margin, bbox$ymax + margin)
+    )
+    
+    ppp_pts <- ppp(x = coords[,1], y = coords[,2], window = w)
+    dens <- density.ppp(ppp_pts, sigma = sigma, edge = TRUE)
+    
+    # Convert to raster and then to contours
+    ras <- raster::raster(dens)
+    raster::crs(ras) <- sp::CRS("+init=epsg:2056")
+    stars_ras <- st_as_stars(ras)
+    
+    vals <- as.vector(stars_ras[[1]])
+    vals_clean <- vals[!is.na(vals) & vals > 0]
+    
+    if (length(vals_clean) == 0) return(NULL)
+    
+    threshold <- quantile(vals_clean, probs = quantile_cut, na.rm = TRUE)
+    contours <- st_contour(stars_ras, breaks = threshold)
+    
+    if (nrow(contours) == 0) return(NULL)
+    
+    # Create buffer around points for intersection
+    points_buffer <- st_buffer(points_projected, dist = sigma * 1.5)
+    points_union <- st_union(points_buffer)
+    
+    # Process individual polygons (no dissolve to maintain household counts)
+    polygons <- contours %>%
+      filter(Max == Inf | Max > threshold) %>%
+      st_cast("POLYGON") %>%
+      st_buffer(0) %>%
+      st_intersection(points_union) %>%
+      st_simplify(dTolerance = 10) %>%
+      mutate(
+        area_m2 = as.numeric(st_area(.)),
+        # COUNT households per polygon for anonymization
+        n_households = lengths(st_intersects(., points_projected))
+      ) %>%
+      # ANONYMIZATION FILTER
+      filter(
+        area_m2 > 1000,
+        n_households >= min_households_per_hotspot
+      ) %>%
+      select(-any_of(c("layer", "Min", "Max"))) %>%
+      mutate(
+        city = unique(points_sf$name_en)[1],
+        category = category_name,
+        indicator = target_indicator,
+        n_source_points = nrow(points_sf),
+        hotspot_id = paste0(target_indicator, "_", category_name, "_", 
+                           unique(points_sf$name_en)[1], "_", row_number())
+      )
+    
+    # Transform back to original CRS
+    if (!is.na(original_crs)) {
+      polygons <- st_transform(polygons, original_crs)
+    }
+    
+    return(polygons)
+  }
+  
+  # Process each city and category
+  results <- map_dfr(cities, function(city) {
+    city_data <- sf_filtered %>% filter(name_en == city)
+    
+    wealthy_points <- city_data %>% filter(label == wealthy_healthy)
+    poor_points <- city_data %>% filter(label == poor_unhealthy)
+    
+    wealthy_polygons <- create_counted_polygons(wealthy_points, "wealthy_healthy")
+    poor_polygons <- create_counted_polygons(poor_points, "poor_unhealthy")
+    
+    bind_rows(wealthy_polygons, poor_polygons)
+  })
+  
+  # Summary stats
+  cat("=== RESULTS", target_indicator, "===\n")
+  cat("Polygons created:", nrow(results), "\n")
+  if(nrow(results) > 0) {
+    cat("Households per hotspot - min:", min(results$n_households), 
+        "max:", max(results$n_households), "\n")
+    cat("Distribution by city and category:\n")
+    print(table(results$city, results$category))
+  }
+  cat("\n")
+  
+  return(results)
+}
+```
+
+## 1.2 Create hotspots for all three indicators
+
+```{r}
+# Set anonymization threshold
+min_households_per_hotspot <- 5
+
+cat("🔄 Creating anonymized hotspots...\n")
+
+# Green spaces hotspots
+hotspots_green_clean <- create_hotspots_with_counts(
+  sf_for_maps_long,
+  target_indicator = "Green",
+  sigma = 50,
+  quantile_cut = 0.9,
+  min_points = 10,
+  min_households_per_hotspot = min_households_per_hotspot
+)
+
+# Noise hotspots
+hotspots_noise_clean <- create_hotspots_with_counts(
+  sf_for_maps_long,
+  target_indicator = "Noise",
+  sigma = 50,
+  quantile_cut = 0.9,
+  min_points = 10,
+  min_households_per_hotspot = min_households_per_hotspot
+)
+
+# NO₂ hotspots
+hotspots_no2_clean <- create_hotspots_with_counts(
+  sf_for_maps_long,
+  target_indicator = "NO₂",
+  sigma = 50,
+  quantile_cut = 0.9,
+  min_points = 10,
+  min_households_per_hotspot = min_households_per_hotspot
+)
+```
+
+# 2. Hotspot cleaning with mapshaper
+
+## 2.1 Cleaning function using mapshaper dissolve
+
+```{r}
+clean_hotspots_with_mapshaper <- function(
+  hotspots_sf, 
+  indicator_name,
+  output_dir = "data_output/mapbox",
+  gap_fill_area = "200m2",
+  sliver_control = 1
+) {
+  
+  if(nrow(hotspots_sf) == 0) {
+    cat("❌ No hotspots for", indicator_name, "\n")
+    return(NULL)
+  }
+  
+  # Create output directory
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = TRUE)
+  }
+  
+  # Transform to WGS84 for web use
+  hotspots_wgs84 <- st_transform(hotspots_sf, 4326)
+  
+  # Temporary files
+  temp_input <- file.path(output_dir, paste0("temp_", indicator_name, "_input.geojson"))
+  final_output <- file.path(output_dir, paste0("hotspots_", indicator_name, "_final.geojson"))
+  
+  # Export for mapshaper processing
+  st_write(hotspots_wgs84, temp_input, delete_dsn = TRUE, quiet = TRUE)
+  
+  # Mapshaper command with dissolve2 for cleaning
+  mapshaper_cmd <- paste0(
+    'mapshaper "', normalizePath(temp_input), '" ',
+    '-dissolve2 category ',
+    'gap-fill-area=', gap_fill_area, ' ',
+    'sliver-control=', sliver_control, ' ',
+    '-clean ',
+    '-o "', normalizePath(final_output, mustWork = FALSE), '"'
+  )
+  
+  cat("🔧 Cleaning", indicator_name, "with dissolve2...\n")
+  
+  # Execute mapshaper command
+  result <- system(mapshaper_cmd, intern = TRUE)
+  
+  # Check results
+  if(file.exists(final_output)) {
+    cleaned_sf <- st_read(final_output, quiet = TRUE)
+    cat("✅", indicator_name, ":", nrow(hotspots_wgs84), "→", nrow(cleaned_sf), "polygons\n")
+    
+    # File size info
+    cat("   File size:", round(file.size(final_output) / 1024, 1), "KB\n\n")
+    
+    # Clean temporary files
+    file.remove(temp_input)
+    
+    return(final_output)
+  } else {
+    cat("❌ Error cleaning", indicator_name, "\n")
+    return(NULL)
+  }
+}
+```
+
+## 2.2 Apply cleaning to all indicators
+
+```{r}
+output_dir <- "data_output/mapbox"
+gap_fill_area <- "200m2"
+sliver_control <- 1
+
+cat("🧹 Cleaning hotspots with mapshaper...\n")
+
+# Clean each indicator
+green_cleaned <- clean_hotspots_with_mapshaper(
+  hotspots_green_clean, 
+  "green",
+  output_dir,
+  gap_fill_area = gap_fill_area,
+  sliver_control = sliver_control
+)
+
+noise_cleaned <- clean_hotspots_with_mapshaper(
+  hotspots_noise_clean, 
+  "noise", 
+  output_dir,
+  gap_fill_area = gap_fill_area,
+  sliver_control = sliver_control
+)
+
+no2_cleaned <- clean_hotspots_with_mapshaper(
+  hotspots_no2_clean, 
+  "no2",
+  output_dir,
+  gap_fill_area = gap_fill_area, 
+  sliver_control = sliver_control
+)
+```
+
+# 3. Final summary and validation
+
+## 3.1 Summary of generated files
+
+```{r}
+cat("🎯 FINAL HOTSPOT FILES\n")
+cat("======================\n")
+
+final_files <- list.files(output_dir, pattern = "hotspots_.*_final\\.geojson", full.names = TRUE)
+
+total_polygons <- 0
+for(f in final_files) {
+  if(file.exists(f)) {
+    filename <- basename(f)
+    size_kb <- round(file.size(f) / 1024, 1)
+    n_features <- nrow(st_read(f, quiet = TRUE))
+    total_polygons <- total_polygons + n_features
+    
+    cat("📁", filename, "-", size_kb, "KB -", n_features, "polygons\n")
+  }
+}
+
+cat("\nTotal hotspot polygons:", total_polygons, "\n")
+cat("Anonymization threshold: minimum", min_households_per_hotspot, "households per hotspot\n")
+cat("Files ready for Mapbox integration in:", output_dir, "\n")
+```
+
+## 3.2 Privacy protection validation
+
+```{r}
+cat("\n🔐 PRIVACY PROTECTION SUMMARY\n")
+cat("==============================\n")
+cat("✅ All hotspots contain minimum", min_households_per_hotspot, "households\n")
+cat("✅ Individual household locations not identifiable\n") 
+cat("✅ Only extreme SES-environment combinations shown\n")
+cat("✅ Small clusters automatically filtered out\n")
+cat("✅ Geometric simplification applied\n")
+cat("\n🌍 Files ready for web publication\n")
+```

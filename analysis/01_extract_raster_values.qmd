@@ -1,0 +1,450 @@
+---
+title: "01_extract_raster_values"
+author: "Olaf König"
+format: html
+editor: visual
+---
+
+# Raster value extraction for environmental inequality analysis
+
+## Objective
+
+Extract road noise, NO₂ pollution, and vegetation (NDVI) values for each household in the Swiss socio-economic dataset (SSEP).
+
+## Source data
+
+-   **SSEP points** : `data_input/data_raw/df_sep.gpkg` (households with socio-economic status)
+-   **Noise raster** : `data_input/data_raw/LrStrasseTag_4_0_Meter.tif` (FOEN, 10m resolution)
+-   **NO₂ raster** : `data_input/data_raw/no2_ymw_2021.asc` (Meteotest, 20m resolution)
+-   **NDVI raster** : Copernicus satellite composite (10m resolution)
+-   **Municipal boundaries** : `data_input/data_raw/sf_polg_swisstopo.gpkg`
+
+## Processing steps
+
+1.  **Spatial join** : Assign BFS code (municipality) to each household
+2.  **Raster extraction** : Noise and NO₂ values via bilinear interpolation
+3.  **NDVI focal calculation** : Green space proportion within 200m and 500m radius
+4.  **Merge and export** : Final dataset with all environmental variables
+
+## Final output
+
+`data_input/data_edit/sep_cross_noise_no2_ndvi.gpkg` - SSEP points with environmental values
+
+# 
+
+------------------------------------------------------------------------
+
+# 1. Base data preparation
+
+## 1.0 Libraries
+
+```{r}
+
+library(tidyverse)
+library(tidylog)
+library(terra)
+library(sf)
+```
+
+## 
+
+## 1.1 Import source datasets
+
+Socio-economic datas from:
+
+<https://drive.google.com/drive/u/0/folders/10_awIUK1tj0z646Y-0ilFn8ggtgh-2Zy>
+
+#### SEP
+
+```{r}
+
+sf_sep <- read_sf("data_input/data_raw/df_sep.gpkg")
+
+sf_sep <- sf_sep %>% mutate(id = row_number())
+
+```
+
+### Raster noise
+
+```{r}
+
+rast_noise <- rast("data_input/data_raw/LrStrasseTag_4_0_Meter.tif")
+```
+
+### Raster NO2
+
+```{r}
+
+rast_no2 <- rast("data_input/data_raw/no2_ymw_2021.asc") %>%
+  {crs(.) <- "EPSG:21781"; .} %>%  # Assigner CRS LV03
+  project("EPSG:2056")              # Reprojeter LV95
+
+```
+
+### Municipalites
+
+```{r}
+
+sf_municipalities <- read_sf("data_input/data_raw/sf_polg_swisstopo.gpkg")
+```
+
+## 1.2 Spatial join with municipalities
+
+```{r}
+
+sf_sep <- st_join(sf_sep, sf_municipalities[, c("bfs_nummer")], left = TRUE)
+
+# # check NA
+# sf_sep %>% filter(is.na(bfs_nummer))
+```
+
+## 1.3 Generic extraction function
+
+```{r}
+
+extract_raster_values_generic <- function(
+  points_sf,
+  raster_input,          # soit chemin (string) soit SpatRaster
+  value_name = "value",
+  method = "bilinear",
+  chunk_size = 10000
+) {
+  # Charger raster si c’est un chemin
+  if (is.character(raster_input)) {
+    rast_obj <- terra::rast(raster_input)
+  } else if (inherits(raster_input, "SpatRaster")) {
+    rast_obj <- raster_input
+  } else {
+    stop("raster_input doit être un chemin ou un objet SpatRaster")
+  }
+  
+  points_vect <- terra::vect(points_sf)
+  
+  n_points <- length(points_vect)
+  n_chunks <- ceiling(n_points / chunk_size)
+  cat("Nombre de points :", n_points, "\nNombre de chunks :", n_chunks, "\n")
+  
+  chunks <- split(1:n_points, ceiling(seq_along(1:n_points) / chunk_size))
+  
+  values_list <- vector("list", length(chunks))
+  pb <- txtProgressBar(min = 0, max = length(chunks), style = 3)
+  
+  for (i in seq_along(chunks)) {
+    idx <- chunks[[i]]
+    chunk_points <- points_vect[idx]
+    vals <- terra::extract(rast_obj, chunk_points, method = method)
+    values_list[[i]] <- vals[, 2]  # Colonne 2 = valeurs extraites
+    setTxtProgressBar(pb, i)
+  }
+  
+  close(pb)
+  
+  values_vec <- unlist(values_list)
+  points_sf[[value_name]] <- values_vec
+  return(points_sf)
+}
+
+
+```
+
+# 2. Simple raster value extraction (noise, NO₂)
+
+## 2.1 Road noise extraction
+
+```{r}
+
+sep_cross_noise <- extract_raster_values_generic(sf_sep, rast_noise, "noise", method = "bilinear")
+
+
+# Replace NA by 0
+sep_cross_noise$noise[is.na(sep_cross_noise$noise)] <- 0
+```
+
+## 2.2 NO₂ pollution extraction
+
+```{r}
+
+sep_cross_no2 <- extract_raster_values_generic(sf_sep, rast_no2, "no2", method = "bilinear")
+
+sep_cross_no2 <- sep_cross_no2 %>%
+  mutate(no2 = ifelse(is.na(no2), 0, no2))
+
+```
+
+```{r}
+
+sep_cross_no2_extract <- sep_cross_no2 %>% 
+  st_drop_geometry() %>% 
+  select(id, no2)
+```
+
+## 2.3 Merge results
+
+```{r}
+
+sep_cross_noise_no2 <- sep_cross_noise %>% left_join(sep_cross_no2_extract)
+  
+```
+
+## 2.4 Export
+
+```{r}
+
+sep_cross_noise_no2 %>% 
+  write_sf("data_input/data_edit/sep_cross_noise_no2.gpkg")
+```
+
+------------------------------------------------------------------------
+
+------------------------------------------------------------------------
+
+# 3. Advanced NDVI processing (focal calculation)
+
+## 3.0 Import sources datasets
+
+Reimport of the previous extractions
+
+```{r}
+
+sep_cross_noise_no2 <- read_sf("data_input/data_edit/sep_cross_noise_no2.gpkg")
+```
+
+Import of the NDVI raster (1.6 GB... I keep it where it is)
+
+```{r}
+
+ndvi <- rast("/Users/bajj@mediait.ch/Documents/Tamedia/2025/2025-05_Vegetation_Index/data_output/tile_fusion/composite_terra_ordered.tif") %>% 
+  project("EPSG:2056")
+```
+
+## 3.1 Municipal data preparation
+
+```{r}
+
+cities_pop <- read_csv("data_input/data_raw/stats_cities.csv") %>% 
+  select(bfs_nummer,nom_officiel, POP_2023)
+
+list_cities <- cities_pop %>% 
+  pull(bfs_nummer)
+
+list_cities_10 <- cities_pop %>% 
+  slice_max(POP_2023, n=10) %>% 
+  pull(bfs_nummer)
+
+sf_cities_10 <- sf_municipalities %>% 
+  filter(bfs_nummer %in% list_cities_10)
+```
+
+Add a buffer to municipalities for the extraction
+
+```{r}
+
+communes_10_buffer <- sf_cities_10 %>%
+  st_buffer(500)
+
+communes_vect <- terra::vect(communes_10_buffer)
+
+```
+
+## 3.2 NDVI raster cropping by municipality
+
+```{r}
+
+# Fonction crop + mask pour une géométrie (commune buffer)
+crop_commune_raster <- function(geom_vect, raster) {
+  cropped <- terra::crop(raster, geom_vect)
+  masked <- terra::mask(cropped, geom_vect)
+  return(masked)
+}
+
+# Appliquer sur chaque commune
+list_crops <- lapply(1:length(communes_vect), function(i) {
+  geom <- communes_vect[i]
+  crop_commune_raster(geom, ndvi)
+})
+
+names(list_crops) <- sf_cities_10$bfs_nummer  # nommer la liste par bfs_nummer
+
+```
+
+### 3.3 Focal calculation by radius (200m and 500m)
+
+```{r}
+
+library(terra)
+
+compute_focal_proportion <- function(raster_crop, radius = 500) {
+  if (all(is.na(values(raster_crop)))) {
+    warning("Le raster est entièrement NA. Retour d'un raster vide.")
+    return(raster_crop)  # Ou un raster vide de même dimension
+  }
+  
+  w <- focalMat(raster_crop, radius, type = "circle")
+  
+  raster_bin <- raster_crop >= 0.5
+  
+  prop_raster <- focal(raster_bin, w, fun = mean, na.rm = TRUE)
+  
+  return(prop_raster)
+}
+
+```
+
+#### Test on one municipality (possible time issue)
+
+```{r}
+
+# # Récupérer le raster croppé et masqué pour la 1ère commune
+# raster_commune <- list_crops[[1]]
+# 
+# # Appliquer la fonction compute_focal_proportion
+# prop_raster <- compute_focal_proportion(raster_commune, radius = 500)
+# 
+# # Visualiser si tu veux
+# terra::plot(prop_raster)
+
+```
+
+### 3.4 Focal values computation
+
+The computation takes a lot of time.... (10 minutes). -\> export the results
+
+```{r}
+
+list_prop_rasters <- map(list_crops, compute_focal_proportion, radius = 500)
+```
+
+```{r}
+
+list_prop_rasters_200 <- map(list_crops, compute_focal_proportion, radius = 200)
+```
+
+### 3.5 Focal values exports
+
+```{r}
+
+library(terra)
+
+output_dir <- "data_output/ndvi_prop_500m/"
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
+
+# Exporter chaque raster dans la liste
+for (bfs_nummer in names(list_prop_rasters)) {
+  raster_to_save <- list_prop_rasters[[bfs_nummer]]
+  
+  # Nettoyer le nom de fichier (au cas où)
+  filename <- paste0(output_dir, "ndvi_prop_500m_commune_", bfs_nummer, ".tif")
+  
+  writeRaster(raster_to_save, filename, overwrite = TRUE)
+  
+  message("Exporté : ", filename)
+}
+
+## 200 m 
+# output_dir <- "data_output/ndvi_prop_200m/"
+# if (!dir.exists(output_dir)) {
+#   dir.create(output_dir, recursive = TRUE)
+# }
+# 
+# # Exporter chaque raster dans la liste
+# for (bfs_nummer in names(list_prop_rasters)) {
+#   raster_to_save <- list_prop_rasters[[bfs_nummer]]
+#   
+#   # Nettoyer le nom de fichier (au cas où)
+#   filename <- paste0(output_dir, "ndvi_prop_200m_commune_", bfs_nummer, ".tif")
+#   
+#   writeRaster(raster_to_save, filename, overwrite = TRUE)
+#   
+#   message("Exporté : ", filename)
+# }
+```
+
+## 3.6 Focal values extraction
+
+```{r}
+
+library(dplyr)
+library(purrr)
+library(terra)
+library(sf)
+
+# 1. Filtrer et splitter par commune
+df_filtered <- sep_cross_noise_no2 %>%
+  filter(bfs_nummer %in% list_cities_10) %>%
+  group_by(bfs_nummer)
+
+list_points_par_commune <- df_filtered %>%
+  group_split()
+
+names(list_points_par_commune) <- df_filtered %>%
+  group_keys() %>%
+  pull(bfs_nummer) %>%
+  as.character()
+
+
+# 2. Fonction d'extraction pour une commune
+extract_vals_commune <- function(points_df, raster, method = "bilinear") {
+  points_sf <- st_as_sf(points_df, coords = c("longitude", "latitude"), crs = 2056) # adapte coords et crs
+  points_vect <- vect(points_sf)
+  
+  vals <- terra::extract(raster, points_vect, method = method)
+  
+  # Fusionner résultats à points_df (en conservant l'ordre)
+  points_df$val_extracted <- vals[, 2]
+  return(points_df)
+}
+
+# Réordonner list_points_par_commune dans l’ordre de list_prop_rasters
+list_points_par_commune_ordered <- list_points_par_commune[names(list_prop_rasters)]
+# 200m
+list_points_par_commune_ordered_200 <- list_points_par_commune[names(list_prop_rasters_200)]
+
+# 3. Application sur toutes les communes, en associant à chaque fois le raster focal correspondant
+results <- map2(list_points_par_commune_ordered, list_prop_rasters, ~ extract_vals_commune(.x, .y))
+
+results_200 <- map2(list_points_par_commune_ordered, list_prop_rasters_200, ~ extract_vals_commune(.x, .y))
+
+
+# 4. Fusionner tous les résultats en un seul data.frame
+final_results <- bind_rows(results)
+final_results_200 <- bind_rows(results_200)
+
+```
+
+# 4. Final merge and export
+
+## 4.1 Merge all environmental indicators and export
+
+```{r}
+
+final_results_for_export <- final_results %>% 
+  select(id, val_extracted) %>% 
+  rename(ndvi_500m = val_extracted) %>% 
+  st_drop_geometry()
+
+final_results_for_export_200 <- final_results %>% 
+  select(id, val_extracted) %>% 
+  rename(ndvi_200m = val_extracted) %>% 
+  st_drop_geometry()
+
+sep_cross_noise_no2 %>%
+  left_join(final_results_for_export) %>% 
+  left_join(final_results_for_export_200) %>% 
+  write_sf("data_input/data_edit/sep_cross_noise_no2_ndvi.gpkg")
+```
+
+## 4.2 Quick validation
+
+```{r}
+
+df_ndvi_results <- final_results
+
+df_ndvi_results %>% 
+  group_by(ssep3_d) %>% 
+  summarise(
+    mean_ndvi = mean(val_extracted),
+    median_ndvi = median(val_extracted)
+  )
+```

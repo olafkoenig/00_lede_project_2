@@ -1,0 +1,303 @@
+---
+title: "02_prepare_cities_analysis"
+author: "Olaf König"
+format: html
+editor: visual
+---
+
+# City-level analysis preparation and statistical computations
+
+## Objective
+
+Transform the base environmental dataset into analysis-ready data with local quartile classifications and aggregate statistics by socio-economic groups within each city.
+
+## Source data
+
+-   **Environmental dataset** : `data_input/data_edit/sep_cross_noise_no2_ndvi.gpkg` (households with environmental exposures)
+-   **City population data** : `data_input/data_raw/stats_cities.csv` (for city selection and ranking)
+-   **Municipal boundaries** : `data_input/data_raw/sf_polg_swisstopo.gpkg` (spatial references)
+
+## Processing steps
+
+1.  **City selection** : Define top 10 and top 6 cities by population + English translations
+2.  **Data preparation** : NDVI logic inversion (green access → lack of green access)
+3.  **Local classifications** : Quartile/quintile/decile rankings within each city for SES and environmental variables
+4.  **Aggregate statistics** : Compute exposure rates by socio-economic groups and environmental thresholds
+5.  **Data transformation** : Convert to long format for analysis and visualization
+
+## Final outputs
+
+-   `data_input/data_edit/cities_reclassified.gpkg` - Points with local classifications and labels
+-   `df_stats_long` - Aggregate statistics in tidy format for visualizations
+
+------------------------------------------------------------------------
+
+```{r setup}
+
+library(tidyverse)
+library(tidylog)
+library(sf)
+```
+
+# 1. City selection and base data preparation
+
+## 1.1 Import datasets
+
+```{r}
+# Main environmental dataset
+sf <- read_sf("data_input/data_edit/sep_cross_noise_no2_ndvi.gpkg") %>% 
+  select(ssep3:geom) %>% 
+  select(id, bfs_nummer, everything())
+
+# Municipal boundaries and city populations
+sf_municipalities <- read_sf("data_input/data_raw/sf_polg_swisstopo.gpkg")
+
+df_cities_pop <- read_csv("data_input/data_raw/stats_cities.csv") %>% 
+  select(bfs_nummer, nom_officiel, POP_2023)
+```
+
+## 1.2 Define city lists and translations
+
+```{r}
+# Top 10 cities by population
+list_cities_10 <- df_cities_pop %>% 
+  slice_max(POP_2023, n = 10) %>% 
+  pull(bfs_nummer)
+
+# Top 6 cities by population  
+list_cities_6 <- df_cities_pop %>% 
+  slice_max(POP_2023, n = 6) %>% 
+  pull(bfs_nummer)
+
+# English translations for international publication
+cities_translation <- tibble(
+  bfs_nummer = c(261, 6621, 2701, 5586, 351, 230, 1061, 3203, 5192, 371),
+  name_en = c(
+    "Zurich", "Geneva", "Basel", "Lausanne", "Bern",
+    "Winterthur", "Lucerne", "St. Gallen", "Lugano", "Biel/Bienne"
+  )
+)
+```
+
+## 1.3 Data preparation and NDVI logic inversion
+
+```{r}
+# Filter to top 10 cities and add English names
+sf <- sf %>% 
+  filter(bfs_nummer %in% list_cities_10) %>% 
+  left_join(cities_translation)
+
+# Invert NDVI logic: from "green access" to "lack of green access"
+# This ensures all indicators point in same direction (higher = worse)
+sf <- sf %>%
+  mutate(
+    ndvi_200m = 1 - ndvi_200m,
+    ndvi_500m = 1 - ndvi_500m
+  )
+```
+
+# 2. Local classification functions
+
+## 2.1 Quartile classification function
+
+```{r}
+prepare_groupings <- function(df) {
+  df %>%
+    mutate(
+      # SES local classifications
+      ssep3d_local_4  = ntile(ssep3, 4),
+      ssep3d_local_5  = ntile(ssep3, 5), 
+      ssep3d_local_10 = ntile(ssep3, 10),
+      
+      # Environmental variables local classifications
+      noise_4  = ntile(noise, 4),
+      noise_5  = ntile(noise, 5),
+      noise_10 = ntile(noise, 10),
+      
+      no2_4    = ntile(no2, 4),
+      no2_5    = ntile(no2, 5),
+      no2_10   = ntile(no2, 10),
+      
+      ndvi_200m_4  = ntile(ndvi_200m, 4),
+      ndvi_200m_5  = ntile(ndvi_200m, 5),
+      ndvi_200m_10 = ntile(ndvi_200m, 10)
+    )
+}
+```
+
+## 2.2 Statistical summary function
+
+```{r}
+summarise_by_grouping <- function(sf_commune, grouping_var) {
+  sf_commune %>%
+    st_drop_geometry() %>%
+    group_by(bfs_nummer, .data[[grouping_var]]) %>%
+    summarise(
+      n = n(),
+      # Noise exposure rates
+      pct_above_50_noise = mean(noise > 50) * 100,
+      pct_above_60_noise = mean(noise > 60) * 100,
+      # NO₂ exposure rates
+      pct_above_15_no2   = mean(no2 > 15) * 100,
+      pct_above_20_no2   = mean(no2 > 20) * 100,
+      # Limited green access rates (inverted NDVI)
+      pct_above_50_ndvi  = mean(ndvi_200m > 0.5) * 100,
+      pct_above_60_ndvi  = mean(ndvi_200m > 0.6) * 100,
+      .groups = "drop"
+    )
+}
+```
+
+# 3. City-level statistical computations
+
+## 3.1 Apply local classifications by city
+
+```{r}
+# Create city-specific datasets with local classifications
+list_sf_by_commune <- sf %>%
+  filter(bfs_nummer %in% list_cities_10) %>%
+  { split(., .$bfs_nummer) }
+
+# Apply grouping function to each city
+list_sf_by_commune_grouped <- map(list_sf_by_commune, prepare_groupings)
+```
+
+## 3.2 Compute exposure statistics by socio-economic groups
+
+```{r}
+# Quintiles (5 groups)
+df_stats_quintiles <- map_dfr(
+  list_sf_by_commune_grouped,
+  summarise_by_grouping,
+  grouping_var = "ssep3d_local_5"
+)
+
+# Quartiles (4 groups)
+df_stats_quartiles <- map_dfr(
+  list_sf_by_commune_grouped,
+  summarise_by_grouping,
+  grouping_var = "ssep3d_local_4"
+)
+
+# Deciles (10 groups)
+df_stats_deciles <- map_dfr(
+  list_sf_by_commune_grouped,
+  summarise_by_grouping,
+  grouping_var = "ssep3d_local_10"
+)
+```
+
+## 3.3 Merge results across classification levels
+
+```{r}
+# Add classification type labels
+df_stats_deciles   <- mutate(df_stats_deciles,   quantile_type = "Deciles")
+df_stats_quintiles <- mutate(df_stats_quintiles, quantile_type = "Quintiles")
+df_stats_quartiles <- mutate(df_stats_quartiles, quantile_type = "Quartiles")
+
+# Standardize column names
+df_stats_deciles <- df_stats_deciles %>%
+  rename(group = ssep3d_local_10) %>%
+  select(bfs_nummer, group, quantile_type, matches("^pct_above"))
+
+df_stats_quintiles <- df_stats_quintiles %>%
+  rename(group = ssep3d_local_5) %>%
+  select(bfs_nummer, group, quantile_type, matches("^pct_above"))
+
+df_stats_quartiles <- df_stats_quartiles %>%
+  rename(group = ssep3d_local_4) %>%
+  select(bfs_nummer, group, quantile_type, matches("^pct_above"))
+
+# Combine all classification levels
+df_stats_all <- bind_rows(df_stats_deciles, df_stats_quintiles, df_stats_quartiles)
+```
+
+# 4. Data transformation and export
+
+## 4.1 Convert to long format for analysis
+
+```{r}
+df_stats_long <- df_stats_all %>%
+  pivot_longer(
+    cols = matches("^pct_above"),
+    names_to = "indicator",
+    values_to = "value"
+  ) %>%
+  mutate(
+    # Clean indicator labels for publication
+    indicator_label = recode(indicator,
+      "pct_above_50_noise" = "Exposed to noise >50 dB",
+      "pct_above_60_noise" = "Exposed to noise >60 dB",
+      "pct_above_15_no2"   = "Exposed to NO₂ >15 μg/m³",
+      "pct_above_20_no2"   = "Exposed to NO₂ >20 μg/m³",
+      "pct_above_50_ndvi"  = "Limited green access (NDVI < 0.5)",
+      "pct_above_60_ndvi"  = "Limited green access (NDVI < 0.6)"
+    )
+  ) %>% 
+  left_join(cities_translation)
+```
+
+## 4.2 Add indicator families for visualization
+
+```{r}
+df_stats_long <- df_stats_long %>%
+  mutate(
+    indicator_family = case_when(
+      grepl("noise", indicator) ~ "Bruit",
+      grepl("no2", indicator) ~ "NO2",
+      grepl("ndvi", indicator) ~ "NDVI"
+    )
+  )
+```
+
+## 4.3 Export classified dataset
+
+```{r}
+# Recombine all city datasets with classifications
+sf_grouped <- bind_rows(list_sf_by_commune_grouped)
+
+# Add classification labels for extreme combinations
+sf_grouped <- sf_grouped %>%
+  mutate(
+    # SES-Noise combinations
+    ssep_noise_label = case_when(
+      ssep3d_local_4 == 1 & noise_4 == 4 ~ "Low SES / High Noise",
+      ssep3d_local_4 == 1 & noise_4 == 1 ~ "Low SES / Low Noise", 
+      ssep3d_local_4 == 4 & noise_4 == 4 ~ "High SES / High Noise",
+      ssep3d_local_4 == 4 & noise_4 == 1 ~ "High SES / Low Noise",
+      TRUE ~ "Other combination"
+    ),
+    # SES-NO₂ combinations
+    ssep_no2_label = case_when(
+      ssep3d_local_4 == 1 & no2_4 == 4 ~ "Low SES / High NO₂",
+      ssep3d_local_4 == 1 & no2_4 == 1 ~ "Low SES / Low NO₂",
+      ssep3d_local_4 == 4 & no2_4 == 4 ~ "High SES / High NO₂", 
+      ssep3d_local_4 == 4 & no2_4 == 1 ~ "High SES / Low NO₂",
+      TRUE ~ "Other combination"
+    ),
+    # SES-Green access combinations
+    ssep_ndvi_label = case_when(
+      ssep3d_local_4 == 1 & ndvi_200m_4 == 4 ~ "Low SES / Low Green",
+      ssep3d_local_4 == 1 & ndvi_200m_4 == 1 ~ "Low SES / High Green",
+      ssep3d_local_4 == 4 & ndvi_200m_4 == 4 ~ "High SES / Low Green",
+      ssep3d_local_4 == 4 & ndvi_200m_4 == 1 ~ "High SES / High Green", 
+      TRUE ~ "Other combination"
+    )
+  )
+
+# Export final classified dataset
+sf_grouped %>% 
+  write_sf("data_input/data_edit/cities_reclassified.gpkg")
+
+cat("✅ Export complete: cities_reclassified.gpkg\n")
+cat("📊 Dataset ready for analysis and visualization\n")
+```
+
+## 4.4 Quick validation
+
+```{r}
+# Verify city coverage
+cat("Cities included:", length(unique(sf_grouped$bfs_nummer)), "\n")
+cat("Total households:", nrow(sf_grouped), "\n") 
+cat("Statistical summary ready for", nrow(df_stats_long), "indicator-group combinations\n")
+```

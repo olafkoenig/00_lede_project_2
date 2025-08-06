@@ -1,0 +1,370 @@
+---
+title: "05_prepare_mapbox_utilities"
+author: "Olaf König"
+format: html
+editor: visual
+---
+
+# Mapbox utilities and web assets preparation
+
+## Objective
+
+Prepare all auxiliary geographic data needed for the web map integration: anonymized SES hexagons, clean municipal boundaries, city centroids, and optionally classified raster tiles.
+
+## Source data
+
+-   `data_input/data_edit/cities_reclassified.gpkg` - Cities with SES classifications
+-   `data_input/data_raw/sf_polg_swisstopo.gpkg` - Municipal boundaries
+-   `data_input/data_raw/swisstopo_tlm_lakes.gpkg` - Lakes for boundary cleaning
+-   `data_input/data_raw/stats_cities.csv` - City population data
+
+## Processing steps
+
+1.  **SES hexagon aggregation** : Create anonymized hexagonal grids showing dominant SES patterns
+2.  **Municipal boundaries** : Clean city limits by removing lake areas
+3.  **City centroids** : Calculate center points for map navigation and labeling
+4.  **Situation map data** : Prepare responsive markers for overview map
+
+## Final outputs
+
+-   `data_output/mapbox/sep_hex.geojson` - Anonymized SES hexagons
+-   `data_output/mapbox/cities.geojson` - Clean municipal boundaries
+-   `data_output/city_centroids_mapbox.csv` - City center coordinates
+-   `data_output/dw_situation_map/dw_cities_situation.csv` - Situation map markers
+
+------------------------------------------------------------------------
+
+```{r setup}
+library(tidyverse)
+library(sf)
+```
+
+```{r load-data}
+# Load main datasets
+sf <- read_sf("data_input/data_edit/cities_reclassified.gpkg") %>% 
+  select(id, bfs_nummer, ssep3d_local_4)
+
+sf_municipalities <- read_sf("data_input/data_raw/sf_polg_swisstopo.gpkg")
+sf_lakes <- read_sf("data_input/data_raw/swisstopo_tlm_lakes.gpkg") %>% 
+  filter(surface_km2 >= 1)
+
+df_cities_pop <- read_csv("data_input/data_raw/stats_cities.csv") %>% 
+  select(bfs_nummer, nom_officiel, POP_2023)
+
+# Define city lists
+list_cities_10 <- df_cities_pop %>% 
+  slice_max(POP_2023, n = 10) %>% 
+  pull(bfs_nummer)
+
+list_cities_6 <- df_cities_pop %>% 
+  slice_max(POP_2023, n = 6) %>% 
+  pull(bfs_nummer)
+
+sf_cities_10 <- sf_municipalities %>% 
+  filter(bfs_nummer %in% list_cities_10)
+```
+
+# 1. SES hexagon aggregation for anonymization
+
+## 1.1 Hexagon creation functions
+
+```{r}
+# Create hexagonal aggregation for one city
+create_hex_city <- function(sf_city, hex_size = 100, min_points = 5) {
+  
+  city_code <- unique(sf_city$bfs_nummer)
+  
+  # Create hexagonal grid for this city
+  hex_grid <- st_make_grid(
+    sf_city, 
+    cellsize = hex_size, 
+    square = FALSE
+  ) %>% 
+    st_sf() %>% 
+    mutate(hex_id = paste0(city_code, "_", row_number()))
+  
+  # Join points to hexagons
+  sf_with_hex <- st_join(sf_city, hex_grid)
+  
+  # Calculate stats per hexagon
+  hex_stats <- sf_with_hex %>% 
+    st_drop_geometry() %>% 
+    filter(!is.na(hex_id)) %>%
+    group_by(hex_id, bfs_nummer) %>% 
+    summarise(
+      n_points = n(),
+      pct_q1 = sum(ssep3d_local_4 == 1) / n() * 100,
+      pct_q2 = sum(ssep3d_local_4 == 2) / n() * 100, 
+      pct_q3 = sum(ssep3d_local_4 == 3) / n() * 100,
+      pct_q4 = sum(ssep3d_local_4 == 4) / n() * 100,
+      dominant_class = as.numeric(names(sort(table(ssep3d_local_4), decreasing = TRUE))[1]),
+      dominant_pct = max(pct_q1, pct_q2, pct_q3, pct_q4),
+      .groups = "drop"
+    ) %>% 
+    filter(n_points >= min_points) %>%
+    mutate(
+      dominance_type = case_when(
+        dominant_pct >= 60 ~ paste0("Dominant Q", dominant_class),
+        dominant_pct >= 40 ~ paste0("Mixed (Q", dominant_class, " majority)"),
+        TRUE ~ "Highly mixed"
+      )
+    )
+  
+  # Final geometry with stats
+  hex_final <- hex_grid %>% 
+    inner_join(hex_stats, by = "hex_id")
+  
+  return(hex_final)
+}
+
+# Main aggregation function
+create_hex_aggregation <- function(sf_data, hex_size = 100, min_points = 5) {
+  
+  # Split by city
+  sf_by_city <- split(sf_data, sf_data$bfs_nummer)
+  
+  # Process each city
+  hex_list <- map(sf_by_city, ~create_hex_city(.x, hex_size, min_points))
+  
+  # Combine results
+  hex_combined <- bind_rows(hex_list)
+  
+  return(hex_combined)
+}
+```
+
+## 1.2 Create and export SES hexagons
+
+```{r}
+cat("🔶 Creating anonymized SES hexagons...\n")
+
+# Create hexagonal aggregation
+sf_hex <- create_hex_aggregation(sf, hex_size = 100, min_points = 5)
+
+# Summary statistics
+cat("Hexagons created:", nrow(sf_hex), "\n")
+sf_hex %>% 
+  st_drop_geometry() %>% 
+  count(dominance_type, sort = TRUE) %>%
+  print()
+
+# Export for web (top 3 cities only for demo)
+sf_hex_mapbox <- sf_hex %>% 
+  filter(bfs_nummer %in% c(3203, 5586, 6621)) %>%  # St. Gallen, Lausanne, Geneva
+  select(bfs_nummer, n_points, dominant_class) %>% 
+  st_transform(4326)
+
+# Create output directory
+dir.create("data_output/mapbox", showWarnings = FALSE, recursive = TRUE)
+
+# Export
+st_write(sf_hex_mapbox, "data_output/mapbox/sep_hex.geojson", delete_dsn = TRUE, quiet = TRUE)
+
+cat("✅ SES hexagons exported to data_output/mapbox/sep_hex.geojson\n")
+cat("   Cities included:", length(unique(sf_hex_mapbox$bfs_nummer)), "\n")
+cat("   Total hexagons:", nrow(sf_hex_mapbox), "\n\n")
+```
+
+# 2. Municipal boundaries without lakes
+
+## 2.1 Clean city boundaries
+
+```{r}
+cat("🗺️ Creating clean municipal boundaries...\n")
+
+# Remove lakes from municipal boundaries
+sf_cities_10_clean <- st_difference(sf_cities_10, st_union(sf_lakes))
+
+# Transform to WGS84 and export
+sf_cities_10_clean %>% 
+  select(bfs_nummer, name) %>% 
+  st_transform(4326) %>% 
+  write_sf("data_output/mapbox/cities.geojson", delete_dsn = TRUE, quiet = TRUE)
+
+cat("✅ Clean city boundaries exported to data_output/mapbox/cities.geojson\n")
+cat("   Cities included:", nrow(sf_cities_10_clean), "\n")
+cat("   Lakes removed from boundaries\n\n")
+```
+
+# 3. City centroids for map navigation
+
+## 3.1 Calculate centroids and add metadata
+
+```{r}
+cat("📍 Calculating city centroids...\n")
+
+# English translations
+cities_translation <- tibble(
+  bfs_nummer = c(261, 6621, 2701, 5586, 351, 230, 1061, 3203, 5192, 371),
+  name_en = c(
+    "Zurich", "Geneva", "Basel", "Lausanne", "Bern",
+    "Winterthur", "Lucerne", "St. Gallen", "Lugano", "Biel/Bienne"
+  )
+)
+
+# Calculate centroids (after lake removal)
+city_centroids <- sf_cities_10_clean %>%
+  st_transform(4326) %>%  # WGS84 for web
+  st_centroid() %>%
+  mutate(
+    longitude = st_coordinates(.)[,1],
+    latitude = st_coordinates(.)[,2]
+  ) %>%
+  st_drop_geometry() %>%
+  select(bfs_nummer, name, longitude, latitude) %>%
+  left_join(cities_translation, by = "bfs_nummer") %>%
+  left_join(df_cities_pop, by = "bfs_nummer")
+
+# Display results
+print(city_centroids)
+
+# Export for general use
+write_csv(city_centroids, "data_output/city_centroids_mapbox.csv")
+
+cat("✅ City centroids exported to data_output/city_centroids_mapbox.csv\n\n")
+```
+
+# 4. Situation map markers (Datawrapper format)
+
+## 4.1 Create responsive markers for situation map
+
+```{r}
+cat("🗺️ Preparing situation map markers...\n")
+
+# Mobile version (smaller text and markers)
+dw_cities_situation_mobile <- city_centroids %>% 
+  mutate(
+    name = name_en,
+    "text-fontSize" = 8,
+    "text-color" = "#2c3e50",
+    icon = "square",
+    color = "#2c3e50",
+    scale = scales::rescale(sqrt(POP_2023), to = c(0.5, 1.75)),
+    mobile = TRUE,
+    desktop = FALSE
+  )
+
+# Desktop version (larger text and markers)  
+dw_cities_situation_desktop <- city_centroids %>% 
+  mutate(
+    name = name_en,
+    "text-fontSize" = 12,
+    "text-color" = "#2c3e50",
+    icon = "square",
+    color = "#2c3e50",
+    scale = scales::rescale(sqrt(POP_2023), to = c(0.5, 2)),
+    mobile = FALSE,
+    desktop = TRUE
+  )
+
+# Combine responsive versions
+dw_cities_situation <- rbind(dw_cities_situation_mobile, dw_cities_situation_desktop)
+
+# Create output directory and export
+dir.create("data_output/dw_situation_map", showWarnings = FALSE, recursive = TRUE)
+write_csv(dw_cities_situation, "data_output/dw_situation_map/dw_cities_situation.csv")
+
+cat("✅ Situation map markers exported to data_output/dw_situation_map/dw_cities_situation.csv\n")
+cat("   Responsive versions: mobile + desktop\n")
+cat("   Cities included:", length(unique(dw_cities_situation$bfs_nummer)) / 2, "\n\n")  # /2 because mobile+desktop
+```
+
+# 5. Optional: Raster tiles preparation
+
+```{r eval=FALSE}
+# This section is kept as reference but not executed by default
+# Uncomment and modify if you need raster tiles for web map
+
+## 5.1 Raster classification function
+traiter_indicateur_par_ville <- function(raster, sf_villes, seuils, labels, nom_raster, sf_lakes) {
+  cat("Processing", nom_raster, "\n")
+  cat("  Raster CRS:", crs(raster, describe = TRUE)$name, "\n")
+  
+  # Process each city separately for manageable file sizes
+  for (i in 1:nrow(sf_villes)) {
+    sf_ville <- sf_villes[i, ]
+    
+    # Vectorize raster for this city
+    sf_ville_vector <- vectoriser_raster_ville(
+      raster = raster,
+      sf_ville = sf_ville,
+      seuils = seuils,
+      labels = labels,
+      nom_raster = nom_raster,
+      sf_lakes = sf_lakes
+    )
+    
+    # Save if data exists
+    if (!is.null(sf_ville_vector) && nrow(sf_ville_vector) > 0) {
+      ville_nom <- if("nom_officiel" %in% names(sf_ville)) sf_ville$nom_officiel else as.character(sf_ville$bfs_nummer)
+      filename <- paste0("data_output/mapbox_layers/", nom_raster, "_", sf_ville$bfs_nummer, "_", 
+                        gsub("[^A-Za-z0-9]", "", ville_nom), ".geojson")
+      
+      st_write(sf_ville_vector, filename, delete_dsn = TRUE, quiet = TRUE)
+      
+      size_kb <- round(file.size(filename) / 1024, 1)
+      cat("    Saved:", basename(filename), "(", size_kb, "KB)\n")
+    }
+  }
+}
+
+# Example usage:
+# rast_noise <- rast("data_input/data_raw/LrStrasseTag_4_0_Meter.tif")
+# seuils_noise <- seq(0, 70, 10)
+# labels_noise <- c("0-10", "10-20", "20-30", "30-40", "40-50", "50-60", "60-70", "70+")
+# traiter_indicateur_par_ville(rast_noise, sf_cities_10, seuils_noise, labels_noise, "noise", sf_lakes)
+```
+
+# 6. Final summary
+
+## 6.1 Mapbox assets summary
+
+```{r}
+cat("🎯 MAPBOX ASSETS SUMMARY\n")
+cat("========================\n")
+
+# Check all output files
+mapbox_files <- list.files("data_output/mapbox", pattern = "\\.geojson$", full.names = TRUE)
+csv_files <- list.files("data_output", pattern = "city_centroids_mapbox\\.csv", recursive = TRUE, full.names = TRUE)
+situation_files <- list.files("data_output/dw_situation_map", pattern = "\\.csv$", full.names = TRUE)
+
+all_files <- c(mapbox_files, csv_files, situation_files)
+
+if (length(all_files) > 0) {
+  total_size_kb <- 0
+  
+  for (file in all_files) {
+    if (file.exists(file)) {
+      size_kb <- round(file.size(file) / 1024, 1)
+      total_size_kb <- total_size_kb + size_kb
+      
+      # Count features for geojson files
+      if (grepl("\\.geojson$", file)) {
+        n_features <- nrow(st_read(file, quiet = TRUE))
+        cat("📁", basename(file), "-", size_kb, "KB -", n_features, "features\n")
+      } else {
+        cat("📁", basename(file), "-", size_kb, "KB\n")
+      }
+    }
+  }
+  
+  cat("\nTotal size:", round(total_size_kb / 1024, 1), "MB\n")
+} else {
+  cat("❌ No output files found\n")
+}
+
+cat("\n🌍 All assets ready for web integration!\n")
+```
+
+## 6.2 Usage instructions
+
+```{r}
+cat("\n📖 USAGE INSTRUCTIONS\n")
+cat("=====================\n")
+cat("1. 🔶 sep_hex.geojson - Add as Mapbox layer for SES patterns\n")
+cat("2. 🗺️ cities.geojson - Use as boundary overlay\n") 
+cat("3. 📍 city_centroids_mapbox.csv - Use for map navigation/labeling\n")
+cat("4. 🎯 dw_cities_situation.csv - Upload to Datawrapper situation map\n")
+cat("\nAll files use WGS84 (EPSG:4326) coordinate system\n")
+cat("Ready for web map integration! 🚀\n")
+```
