@@ -345,9 +345,9 @@ dw_cities_lolipop <- df_stats_long %>%
   select(bfs_nummer, name_en, group, indicator_label, value) %>% 
   mutate(
     indicator_label_en = case_when(
-      indicator_label == "Exposed to noise >50 dB" ~ "Households exposed to noise >50 dB",
-      indicator_label == "Exposed to NO₂ >15 μg/m³" ~ "Households exposed to NO₂ >15 μg/m³",
-      indicator_label == "Limited green access (NDVI < 0.5)" ~ 'Households with limited green access: less than 50% of "green" surfaces within 200m'
+      indicator_label == "Exposed to noise >50 dB" ~ "Households exposed to noise >50 dB, in %",
+      indicator_label == "Exposed to NO₂ >15 μg/m³" ~ "Households exposed to NO₂ >15 μg/m³, in %",
+      indicator_label == "Limited green access (NDVI < 0.5)" ~ 'Households with limited green access: less than 50% of "green" surfaces within 200m, in %'
     )
   ) %>% 
   pivot_wider(
