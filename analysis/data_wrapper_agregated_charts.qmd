@@ -85,13 +85,14 @@ dw_national_quartiles %>%
     values_to = "value"
   ) %>% 
 mutate(
-    ssep3_global_quartiles = case_when(
+    ssep3_global_quartiles_label = case_when(
       ssep3_global_quartiles == 1 ~ "Lowest",
       ssep3_global_quartiles == 2 ~ "Lower-middle", 
       ssep3_global_quartiles == 3 ~ "Upper-middle",
       ssep3_global_quartiles == 4 ~ "Highest",
       TRUE ~ as.character(ssep3_global_quartiles)  # garde les valeurs inattendues
     )) %>% 
+    arrange(desc(ssep3_global_quartiles)) %>% 
   dw_data_to_chart("Qsh2p")
 ```
 
