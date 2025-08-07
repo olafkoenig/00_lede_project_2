@@ -514,7 +514,7 @@ var config = {
       hidden: false,
       title: "The privilege of green",
       description:
-        'This chart reveals spatial segregation in action. While vegetation is scarce citywide, <span style="background: #006600; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;households</span> consistently access greener environments than their <span style="background: #663399; color: white; padding: 0 0.3em; border-radius: 0.3em;">less&nbsp;affluent&nbsp;neighbors</span>. Nature becomes a luxury good.',
+        'This chart reveals spatial segregation in action. While vegetation is scarce citywide, <span style="background: #4575b4; color: white; padding: 0 0.3em; border-radius: 0.3em;">wealthy&nbsp;households</span> consistently access greener environments than their <span style="background: #d73027; color: white; padding: 0 0.3em; border-radius: 0.3em;">less&nbsp;affluent&nbsp;neighbors</span>. Nature becomes a luxury good.',
       chart: {
         type: "datawrapper",
         embedUrl: "https://datawrapper.dwcdn.net/qRJ8l/1/",
@@ -705,7 +705,7 @@ var config = {
       hidden: false,
       title: "Unequal exposure to noise",
       description:
-        'Like in St. Gallen, <span style="background: #006600; color: white; padding: 0 0.3em; border-radius: 0.3em;">privileged&nbsp;households</span> enjoy quieter environments while <span style="background: #663399; color: white; padding: 0 0.3em; border-radius: 0.3em;">disadvantaged&nbsp;families</span> bear the burden of noise pollution in Lausanne.',
+        'Like in St. Gallen, <span style="background: #4575b4; color: white; padding: 0 0.3em; border-radius: 0.3em;">privileged&nbsp;households</span> enjoy quieter environments while <span style="background: #d73027; color: white; padding: 0 0.3em; border-radius: 0.3em;">disadvantaged&nbsp;families</span> bear the burden of noise pollution in Lausanne.',
       getLocation: function () {
         return config.getLocation(
           config.cities.lausanne,

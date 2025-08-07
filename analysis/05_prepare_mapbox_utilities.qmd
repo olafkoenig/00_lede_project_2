@@ -8,31 +8,27 @@ editor: visual
 # Mapbox utilities and web assets preparation
 
 ## Objective
-
 Prepare all auxiliary geographic data needed for the web map integration: anonymized SES hexagons, clean municipal boundaries, city centroids, and optionally classified raster tiles.
 
 ## Source data
-
--   `data_input/data_edit/cities_reclassified.gpkg` - Cities with SES classifications
--   `data_input/data_raw/sf_polg_swisstopo.gpkg` - Municipal boundaries
--   `data_input/data_raw/swisstopo_tlm_lakes.gpkg` - Lakes for boundary cleaning
--   `data_input/data_raw/stats_cities.csv` - City population data
+- `data_input/data_edit/cities_reclassified.gpkg` - Cities with SES classifications
+- `data_input/data_raw/sf_polg_swisstopo.gpkg` - Municipal boundaries
+- `data_input/data_raw/swisstopo_tlm_lakes.gpkg` - Lakes for boundary cleaning
+- `data_input/data_raw/stats_cities.csv` - City population data
 
 ## Processing steps
-
-1.  **SES hexagon aggregation** : Create anonymized hexagonal grids showing dominant SES patterns
-2.  **Municipal boundaries** : Clean city limits by removing lake areas
-3.  **City centroids** : Calculate center points for map navigation and labeling
-4.  **Situation map data** : Prepare responsive markers for overview map
+1. **SES hexagon aggregation** : Create anonymized hexagonal grids showing dominant SES patterns
+2. **Municipal boundaries** : Clean city limits by removing lake areas
+3. **City centroids** : Calculate center points for map navigation and labeling
+4. **Situation map data** : Prepare responsive markers for overview map
 
 ## Final outputs
+- `data_output/mapbox/sep_hex.geojson` - Anonymized SES hexagons
+- `data_output/mapbox/cities.geojson` - Clean municipal boundaries
+- `data_output/city_centroids_mapbox.csv` - City center coordinates
+- `data_output/mapbox_vectors/*.geojson` - Classified environmental layers (noise, NO₂, NDVI)
 
--   `data_output/mapbox/sep_hex.geojson` - Anonymized SES hexagons
--   `data_output/mapbox/cities.geojson` - Clean municipal boundaries
--   `data_output/city_centroids_mapbox.csv` - City center coordinates
--   `data_output/dw_situation_map/dw_cities_situation.csv` - Situation map markers
-
-------------------------------------------------------------------------
+---
 
 ```{r setup}
 library(tidyverse)
@@ -224,121 +220,193 @@ write_csv(city_centroids, "data_output/city_centroids_mapbox.csv")
 cat("✅ City centroids exported to data_output/city_centroids_mapbox.csv\n\n")
 ```
 
-# 4. Situation map markers (Datawrapper format)
+# 4. Raster classification and vectorization
 
-## 4.1 Create responsive markers for situation map
+## 4.1 Load rasters
 
 ```{r}
-cat("🗺️ Preparing situation map markers...\n")
+library(terra)
 
-# Mobile version (smaller text and markers)
-dw_cities_situation_mobile <- city_centroids %>% 
-  mutate(
-    name = name_en,
-    "text-fontSize" = 8,
-    "text-color" = "#2c3e50",
-    icon = "square",
-    color = "#2c3e50",
-    scale = scales::rescale(sqrt(POP_2023), to = c(0.5, 1.75)),
-    mobile = TRUE,
-    desktop = FALSE
-  )
+# Load environmental rasters
+rast_noise <- rast("data_input/data_raw/LrStrasseTag_4_0_Meter.tif")
 
-# Desktop version (larger text and markers)  
-dw_cities_situation_desktop <- city_centroids %>% 
-  mutate(
-    name = name_en,
-    "text-fontSize" = 12,
-    "text-color" = "#2c3e50",
-    icon = "square",
-    color = "#2c3e50",
-    scale = scales::rescale(sqrt(POP_2023), to = c(0.5, 2)),
-    mobile = FALSE,
-    desktop = TRUE
-  )
+rast_no2 <- rast("data_input/data_raw/no2_ymw_2021.asc") %>%
+  {crs(.) <- "EPSG:21781"; .} %>%  # Assign LV03 CRS
+  project("EPSG:2056")              # Reproject to LV95
 
-# Combine responsive versions
-dw_cities_situation <- rbind(dw_cities_situation_mobile, dw_cities_situation_desktop)
+rast_ndvi <- rast("/Users/bajj@mediait.ch/Documents/Tamedia/2025/2025-05_Vegetation_Index/data_output/tile_fusion/composite_terra_ordered.tif") %>% 
+  project("EPSG:2056")
 
-# Create output directory and export
-dir.create("data_output/dw_situation_map", showWarnings = FALSE, recursive = TRUE)
-write_csv(dw_cities_situation, "data_output/dw_situation_map/dw_cities_situation.csv")
-
-cat("✅ Situation map markers exported to data_output/dw_situation_map/dw_cities_situation.csv\n")
-cat("   Responsive versions: mobile + desktop\n")
-cat("   Cities included:", length(unique(dw_cities_situation$bfs_nummer)) / 2, "\n\n")  # /2 because mobile+desktop
+cat("📊 Rasters loaded:\n")
+cat("   Noise: CRS", crs(rast_noise, describe = TRUE)$name, "\n")
+cat("   NO₂: CRS", crs(rast_no2, describe = TRUE)$name, "\n") 
+cat("   NDVI: CRS", crs(rast_ndvi, describe = TRUE)$name, "\n\n")
 ```
 
-# 5. Optional: Raster tiles preparation
+## 4.2 Classification thresholds
 
-```{r eval=FALSE}
-# This section is kept as reference but not executed by default
-# Uncomment and modify if you need raster tiles for web map
+```{r}
+# Noise: 10dB increments from 0 to 70+
+seuils_noise <- c(0, seq(10, 70, 10), Inf)
+labels_noise <- c("0-10", "10-20", "20-30", "30-40", "40-50", "50-60", "60-70", "70+")
 
-## 5.1 Raster classification function
-traiter_indicateur_par_ville <- function(raster, sf_villes, seuils, labels, nom_raster, sf_lakes) {
-  cat("Processing", nom_raster, "\n")
-  cat("  Raster CRS:", crs(raster, describe = TRUE)$name, "\n")
+# NO₂: 5 μg/m³ increments from 0 to 40+
+seuils_no2 <- c(0, seq(5, 40, 5), Inf)
+labels_no2 <- c("0-5", "5-10", "10-15", "15-20", "20-25", "25-30", "30-35", "35-40", "40+")
+
+# NDVI: special class for <0.2, then 0.1 increments from 0.2 to 1.0+
+seuils_ndvi <- c(-Inf, 0.2, seq(0.3, 1.0, 0.1), Inf)
+labels_ndvi <- c("<0.2", "0.2-0.3", "0.3-0.4", "0.4-0.5", "0.5-0.6", 
+                 "0.6-0.7", "0.7-0.8", "0.8-0.9", "0.9-1.0", "1.0+")
+
+cat("📋 Classification thresholds defined:\n")
+cat("   Noise:", length(labels_noise), "classes\n")
+cat("   NO₂:", length(labels_no2), "classes\n")
+cat("   NDVI:", length(labels_ndvi), "classes\n\n")
+```
+
+## 4.3 Vectorization function
+
+```{r}
+vectoriser_raster_ville <- function(raster, sf_ville, seuils, labels, nom_raster, sf_lakes) {
+  ville_nom <- if("nom_officiel" %in% names(sf_ville)) sf_ville$nom_officiel else as.character(sf_ville$bfs_nummer)
+  cat("  Processing city:", ville_nom, "\n")
   
-  # Process each city separately for manageable file sizes
-  for (i in 1:nrow(sf_villes)) {
-    sf_ville <- sf_villes[i, ]
-    
-    # Vectorize raster for this city
-    sf_ville_vector <- vectoriser_raster_ville(
-      raster = raster,
-      sf_ville = sf_ville,
-      seuils = seuils,
-      labels = labels,
-      nom_raster = nom_raster,
-      sf_lakes = sf_lakes
-    )
-    
-    # Save if data exists
-    if (!is.null(sf_ville_vector) && nrow(sf_ville_vector) > 0) {
-      ville_nom <- if("nom_officiel" %in% names(sf_ville)) sf_ville$nom_officiel else as.character(sf_ville$bfs_nummer)
-      filename <- paste0("data_output/mapbox_layers/", nom_raster, "_", sf_ville$bfs_nummer, "_", 
-                        gsub("[^A-Za-z0-9]", "", ville_nom), ".geojson")
-      
-      st_write(sf_ville_vector, filename, delete_dsn = TRUE, quiet = TRUE)
-      
-      size_kb <- round(file.size(filename) / 1024, 1)
-      cat("    Saved:", basename(filename), "(", size_kb, "KB)\n")
+  # Project city to raster CRS
+  sf_ville_proj <- st_transform(sf_ville, crs(raster))
+  
+  # 200m buffer for context
+  sf_ville_buffer <- st_buffer(sf_ville_proj, 200)
+  
+  # Convert to SpatVector for terra
+  ville_vect <- vect(sf_ville_buffer)
+  
+  # Crop and mask raster
+  raster_clip <- crop(raster, ville_vect)
+  raster_mask <- mask(raster_clip, ville_vect)
+  
+  # Classification matrix
+  rcl_matrix <- matrix(c(seuils[-length(seuils)], seuils[-1], 1:length(labels)), ncol = 3)
+  
+  # Classify
+  raster_class <- classify(raster_mask, rcl_matrix, include.lowest = TRUE)
+  
+  # Vectorize
+  vect_polygons <- as.polygons(raster_class, dissolve = TRUE)
+  sf_polygons <- st_as_sf(vect_polygons)
+  
+  # Check for data
+  if (nrow(sf_polygons) == 0) {
+    cat("    No data found\n")
+    return(NULL)
+  }
+  
+  # Get value column
+  col_valeurs <- names(sf_polygons)[1]
+  
+  # Create final attributes
+  sf_final <- sf_polygons %>%
+    mutate(
+      raster_source = nom_raster,
+      city = ville_nom,
+      bfs_nummer = sf_ville$bfs_nummer,
+      class_ord = .data[[col_valeurs]], # Ordinal value 1 to n
+      class_range = case_when(
+        class_ord >= 1 & class_ord <= length(labels) ~ labels[class_ord],
+        TRUE ~ "Unclassified"
+      ),
+      .before = 1
+    ) %>%
+    select(-all_of(col_valeurs)) %>%
+    filter(class_ord >= 1 & class_ord <= length(labels)) # Keep only valid classes
+  
+  # Remove lakes (faster at the end)
+  if (!is.null(sf_lakes) && nrow(sf_final) > 0) {
+    sf_lakes_proj <- st_transform(sf_lakes, st_crs(sf_final))
+    if (nrow(sf_lakes_proj) > 0) {
+      sf_final <- st_difference(sf_final, st_union(sf_lakes_proj))
     }
+  }
+  
+  # Transform to WGS84 for web
+  sf_wgs84 <- st_transform(sf_final, "EPSG:4326")
+  
+  cat("    ", nrow(sf_wgs84), "polygons created\n")
+  return(sf_wgs84)
+}
+```
+
+## 4.4 Process all indicators by city
+
+```{r}
+# Create output directory
+dir.create("data_output/mapbox_vectors", showWarnings = FALSE, recursive = TRUE)
+
+cat("🔄 Processing raster vectorization...\n")
+
+# Process each indicator for each city
+for (i in 1:nrow(sf_cities_10)) {
+  sf_ville <- sf_cities_10[i, ]
+  ville_nom_clean <- gsub("[^A-Za-z0-9]", "", sf_ville$name)
+  
+  cat("\n--- Processing", sf_ville$name, "---\n")
+  
+  # NOISE
+  sf_noise <- vectoriser_raster_ville(rast_noise, sf_ville, seuils_noise, labels_noise, "noise", sf_lakes)
+  if (!is.null(sf_noise) && nrow(sf_noise) > 0) {
+    filename <- paste0("data_output/mapbox_vectors/noise_", sf_ville$bfs_nummer, "_", ville_nom_clean, ".geojson")
+    st_write(sf_noise, filename, delete_dsn = TRUE, quiet = TRUE)
+    size_kb <- round(file.size(filename) / 1024, 1)
+    cat("    ✅ Noise:", basename(filename), "(", size_kb, "KB)\n")
+  }
+  
+  # NO₂
+  sf_no2 <- vectoriser_raster_ville(rast_no2, sf_ville, seuils_no2, labels_no2, "no2", sf_lakes)
+  if (!is.null(sf_no2) && nrow(sf_no2) > 0) {
+    filename <- paste0("data_output/mapbox_vectors/no2_", sf_ville$bfs_nummer, "_", ville_nom_clean, ".geojson")
+    st_write(sf_no2, filename, delete_dsn = TRUE, quiet = TRUE)
+    size_kb <- round(file.size(filename) / 1024, 1)
+    cat("    ✅ NO₂:", basename(filename), "(", size_kb, "KB)\n")
+  }
+  
+  # NDVI
+  sf_ndvi <- vectoriser_raster_ville(rast_ndvi, sf_ville, seuils_ndvi, labels_ndvi, "ndvi", sf_lakes)
+  if (!is.null(sf_ndvi) && nrow(sf_ndvi) > 0) {
+    filename <- paste0("data_output/mapbox_vectors/ndvi_", sf_ville$bfs_nummer, "_", ville_nom_clean, ".geojson")
+    st_write(sf_ndvi, filename, delete_dsn = TRUE, quiet = TRUE)
+    size_kb <- round(file.size(filename) / 1024, 1)
+    cat("    ✅ NDVI:", basename(filename), "(", size_kb, "KB)\n")
   }
 }
 
-# Example usage:
-# rast_noise <- rast("data_input/data_raw/LrStrasseTag_4_0_Meter.tif")
-# seuils_noise <- seq(0, 70, 10)
-# labels_noise <- c("0-10", "10-20", "20-30", "30-40", "40-50", "50-60", "60-70", "70+")
-# traiter_indicateur_par_ville(rast_noise, sf_cities_10, seuils_noise, labels_noise, "noise", sf_lakes)
+cat("\n✅ All raster vectorization complete!\n\n")
 ```
 
-# 6. Final summary
+# 5. Final summary
 
-## 6.1 Mapbox assets summary
+## 5.1 Mapbox assets summary
 
 ```{r}
 cat("🎯 MAPBOX ASSETS SUMMARY\n")
 cat("========================\n")
 
 # Check all output files
-mapbox_files <- list.files("data_output/mapbox", pattern = "\\.geojson$", full.names = TRUE)
-csv_files <- list.files("data_output", pattern = "city_centroids_mapbox\\.csv", recursive = TRUE, full.names = TRUE)
-situation_files <- list.files("data_output/dw_situation_map", pattern = "\\.csv$", full.names = TRUE)
+hex_files <- list.files("data_output/mapbox", pattern = "sep_hex\\.geojson$", full.names = TRUE)
+boundary_files <- list.files("data_output/mapbox", pattern = "cities\\.geojson$", full.names = TRUE)
+vector_files <- list.files("data_output/mapbox_vectors", pattern = "\\.geojson$", full.names = TRUE)
+centroid_files <- list.files("data_output", pattern = "city_centroids_mapbox\\.csv", recursive = TRUE, full.names = TRUE)
 
-all_files <- c(mapbox_files, csv_files, situation_files)
+all_files <- c(hex_files, boundary_files, vector_files, centroid_files)
 
 if (length(all_files) > 0) {
   total_size_kb <- 0
   
-  for (file in all_files) {
+  cat("📦 CORE ASSETS:\n")
+  for (file in c(hex_files, boundary_files, centroid_files)) {
     if (file.exists(file)) {
       size_kb <- round(file.size(file) / 1024, 1)
       total_size_kb <- total_size_kb + size_kb
       
-      # Count features for geojson files
       if (grepl("\\.geojson$", file)) {
         n_features <- nrow(st_read(file, quiet = TRUE))
         cat("📁", basename(file), "-", size_kb, "KB -", n_features, "features\n")
@@ -348,7 +416,22 @@ if (length(all_files) > 0) {
     }
   }
   
+  cat("\n📊 VECTORIZED RASTERS:\n")
+  if (length(vector_files) > 0) {
+    for (file in vector_files) {
+      if (file.exists(file)) {
+        size_kb <- round(file.size(file) / 1024, 1)
+        total_size_kb <- total_size_kb + size_kb
+        n_features <- nrow(st_read(file, quiet = TRUE))
+        cat("📁", basename(file), "-", size_kb, "KB -", n_features, "polygons\n")
+      }
+    }
+  } else {
+    cat("❌ No vector files found in data_output/mapbox_vectors/\n")
+  }
+  
   cat("\nTotal size:", round(total_size_kb / 1024, 1), "MB\n")
+  cat("Total files:", length(all_files), "\n")
 } else {
   cat("❌ No output files found\n")
 }
@@ -356,7 +439,7 @@ if (length(all_files) > 0) {
 cat("\n🌍 All assets ready for web integration!\n")
 ```
 
-## 6.2 Usage instructions
+## 5.2 Usage instructions
 
 ```{r}
 cat("\n📖 USAGE INSTRUCTIONS\n")
@@ -364,7 +447,10 @@ cat("=====================\n")
 cat("1. 🔶 sep_hex.geojson - Add as Mapbox layer for SES patterns\n")
 cat("2. 🗺️ cities.geojson - Use as boundary overlay\n") 
 cat("3. 📍 city_centroids_mapbox.csv - Use for map navigation/labeling\n")
-cat("4. 🎯 dw_cities_situation.csv - Upload to Datawrapper situation map\n")
+cat("4. 📊 mapbox_vectors/*.geojson - Classified environmental layers:\n")
+cat("   - noise_*_*.geojson - Noise exposure levels by city\n")
+cat("   - no2_*_*.geojson - Air pollution levels by city\n") 
+cat("   - ndvi_*_*.geojson - Vegetation coverage by city\n")
 cat("\nAll files use WGS84 (EPSG:4326) coordinate system\n")
-cat("Ready for web map integration! 🚀\n")
+cat("Ready for Mapbox Studio integration! 🚀\n")
 ```
