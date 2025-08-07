@@ -8,27 +8,31 @@ editor: visual
 # Mapbox utilities and web assets preparation
 
 ## Objective
+
 Prepare all auxiliary geographic data needed for the web map integration: anonymized SES hexagons, clean municipal boundaries, city centroids, and optionally classified raster tiles.
 
 ## Source data
-- `data_input/data_edit/cities_reclassified.gpkg` - Cities with SES classifications
-- `data_input/data_raw/sf_polg_swisstopo.gpkg` - Municipal boundaries
-- `data_input/data_raw/swisstopo_tlm_lakes.gpkg` - Lakes for boundary cleaning
-- `data_input/data_raw/stats_cities.csv` - City population data
+
+-   `data_input/data_edit/cities_reclassified.gpkg` - Cities with SES classifications
+-   `data_input/data_raw/sf_polg_swisstopo.gpkg` - Municipal boundaries
+-   `data_input/data_raw/swisstopo_tlm_lakes.gpkg` - Lakes for boundary cleaning
+-   `data_input/data_raw/stats_cities.csv` - City population data
 
 ## Processing steps
-1. **SES hexagon aggregation** : Create anonymized hexagonal grids showing dominant SES patterns
-2. **Municipal boundaries** : Clean city limits by removing lake areas
-3. **City centroids** : Calculate center points for map navigation and labeling
-4. **Situation map data** : Prepare responsive markers for overview map
+
+1.  **SES hexagon aggregation** : Create anonymized hexagonal grids showing dominant SES patterns
+2.  **Municipal boundaries** : Clean city limits by removing lake areas
+3.  **City centroids** : Calculate center points for map navigation and labeling
+4.  **Situation map data** : Prepare responsive markers for overview map
 
 ## Final outputs
-- `data_output/mapbox/sep_hex.geojson` - Anonymized SES hexagons
-- `data_output/mapbox/cities.geojson` - Clean municipal boundaries
-- `data_output/city_centroids_mapbox.csv` - City center coordinates
-- `data_output/mapbox_vectors/*.geojson` - Classified environmental layers (noise, NO₂, NDVI)
 
----
+-   `data_output/mapbox/sep_hex.geojson` - Anonymized SES hexagons
+-   `data_output/mapbox/cities.geojson` - Clean municipal boundaries
+-   `data_output/city_centroids_mapbox.csv` - City center coordinates
+-   `data_output/mapbox_vectors/*.geojson` - Classified environmental layers (noise, NO₂, NDVI)
+
+------------------------------------------------------------------------
 
 ```{r setup}
 library(tidyverse)
